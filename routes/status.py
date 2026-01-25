@@ -1,36 +1,34 @@
-from fastapi import APIRouter
+import os
+from fastapi import APIRouter, HTTPException
 from services.redis_client import redis_client
 
-router = APIRouter()
+router = APIRouter(prefix="/jobs", tags=["status"])
 
-@router.get("/jobs/{job_id}")
+
+@router.get("/{job_id}")
 def get_job_status(job_id: str):
-    key = f"job_status:{job_id}"
+    data = redis_client.hgetall(f"job_status:{job_id}")
+    if not data:
+        raise HTTPException(404, "Job not found")
+    return data
 
-    job = redis_client.hgetall(key)
 
-    # Job not found (never error)
-    if not job:
-        return {
-            "job_id": job_id,
-            "status": "NOT_FOUND",
-        }
+@router.get("/{job_id}/output")
+def download_output(job_id: str, upto_page: int | None = None):
+    data = redis_client.hgetall(f"job_status:{job_id}")
+    path = data.get("output_path")
 
-    # Redis returns bytes → decode safely
-    decoded = {}
-    for k, v in job.items():
-        try:
-            decoded[k.decode()] = v.decode()
-        except Exception:
-            decoded[str(k)] = str(v)
+    if not path or not os.path.exists(path):
+        raise HTTPException(404, "Output not available")
 
-    return {
-        "job_id": decoded.get("job_id", job_id),
-        "status": decoded.get("status", "UNKNOWN"),
-        "job_type": decoded.get("job_type"),
-        "input_type": decoded.get("input_type"),
-        "attempts": int(decoded.get("attempts", 0)),
-        "output_path": decoded.get("output_path"),
-        "error": decoded.get("error"),
-        "updated_at": decoded.get("updated_at"),
-    }
+    if upto_page is None:
+        return open(path, "r", encoding="utf-8").read()
+
+    result = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            result.append(line)
+            if line.startswith(f"=== Page {upto_page} ==="):
+                break
+
+    return "".join(result)
