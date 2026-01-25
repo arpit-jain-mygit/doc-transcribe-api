@@ -46,3 +46,38 @@ def cancel_job(job_id: str):
     )
 
     return {"job_id": job_id, "status": "CANCEL_REQUESTED"}
+
+@router.post("/transcription")
+def submit_transcription(payload: dict):
+    """
+    payload:
+      {
+        "url": "https://youtube.com/..."
+      }
+    """
+
+    job_id = f"transcribe-{uuid.uuid4().hex}"
+
+    redis_client.hset(
+        f"job_status:{job_id}",
+        mapping={
+            "job_id": job_id,
+            "job_type": "TRANSCRIBE",
+            "status": "QUEUED",
+            "created_at": datetime.utcnow().isoformat(),
+        },
+    )
+
+    enqueue_job(
+        {
+            "job_id": job_id,
+            "job_type": "TRANSCRIBE",
+            "input_type": "YOUTUBE",
+            **payload,
+        }
+    )
+
+    return {
+        "job_id": job_id,
+        "status": "QUEUED",
+    }
