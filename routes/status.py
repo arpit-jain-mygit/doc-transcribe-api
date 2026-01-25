@@ -10,7 +10,8 @@ def get_job_status(job_id: str):
     data = redis_client.hgetall(f"job_status:{job_id}")
     if not data:
         raise HTTPException(404, "Job not found")
-    return data
+
+    return {k: v for k, v in data.items()}
 
 
 @router.get("/{job_id}/output")
