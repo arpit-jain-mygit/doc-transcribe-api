@@ -1,9 +1,9 @@
-from fastapi import APIRouter
-
-from fastapi.responses import RedirectResponse
-from fastapi import HTTPException
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from services.redis_client import redis_client
 from services.gcs import generate_signed_url
+import requests
+import os
 
 router = APIRouter(prefix="/jobs", tags=["status"])
 
@@ -24,11 +24,22 @@ def download_output(job_id: str):
         raise HTTPException(404, "Job not found")
 
     gcs_uri = data.get("output_path")
-    if not gcs_uri or not gcs_uri.startswith("gs://"):
+    if not gcs_uri:
         raise HTTPException(404, "Output not available")
 
-    signed_url = generate_signed_url(gcs_uri, expires_minutes=15)
+    signed_url = generate_signed_url(gcs_uri)
 
-    # 🔑 browser will download automatically
-    return RedirectResponse(url=signed_url, status_code=302)
+    r = requests.get(signed_url, stream=True)
+    if r.status_code != 200:
+        raise HTTPException(500, "Failed to fetch file from storage")
+
+    filename = os.path.basename(gcs_uri)
+
+    return StreamingResponse(
+        r.iter_content(chunk_size=8192),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
 
