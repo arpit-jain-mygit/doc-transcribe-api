@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from services.redis_client import redis_client
+from services.gcs import generate_signed_url
 
 router = APIRouter(prefix="/jobs", tags=["status"])
 
@@ -25,10 +26,10 @@ def download_output(job_id: str):
     if not gcs_uri or not gcs_uri.startswith("gs://"):
         raise HTTPException(404, "Output not available")
 
-    # For now: return the GCS URI directly
-    # (signed URL support can be added later)
+    download_url = generate_signed_url(gcs_uri)
+
     return {
         "job_id": job_id,
-        "output_path": gcs_uri
+        "download_url": download_url
     }
 
