@@ -13,6 +13,7 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 @router.post("/ocr")
 def submit_ocr(payload: dict):
     job_id = f"ocr-{uuid.uuid4().hex}"
+    input_type = payload.get("input_type", "PDF")
 
     redis_client.hset(
         f"job_status:{job_id}",
@@ -24,14 +25,29 @@ def submit_ocr(payload: dict):
         },
     )
 
-    enqueue_job(
-        {
-            "job_id": job_id,
-            "job_type": "OCR",
-            "input_type": "PDF",
-            **payload,
-        }
-    )
+    job_payload = {
+        "job_id": job_id,
+        "job_type": "OCR",
+        "input_type": input_type,
+    }
+
+    # ------------------------------------------
+    # OPTION B: GitHub → GCS → OCR
+    # ------------------------------------------
+    if input_type == "GITHUB":
+        github_url = payload.get("url")
+        if not github_url:
+            raise HTTPException(400, "Missing GitHub PDF URL")
+
+        job_payload["github_url"] = github_url
+
+    # ------------------------------------------
+    # Local / direct PDF (existing flow)
+    # ------------------------------------------
+    else:
+        job_payload.update(payload)
+
+    enqueue_job(job_payload)
 
     return {"job_id": job_id, "status": "QUEUED"}
 
