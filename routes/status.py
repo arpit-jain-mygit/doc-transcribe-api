@@ -1,4 +1,3 @@
-import os
 from fastapi import APIRouter, HTTPException
 from services.redis_client import redis_client
 
@@ -15,21 +14,21 @@ def get_job_status(job_id: str):
 
 
 @router.get("/{job_id}/output")
-def download_output(job_id: str, upto_page: int | None = None):
+def download_output(job_id: str):
     data = redis_client.hgetall(f"job_status:{job_id}")
-    path = data.get("output_path")
 
-    if not path or not os.path.exists(path):
+    if not data:
+        raise HTTPException(404, "Job not found")
+
+    gcs_uri = data.get("output_path")
+
+    if not gcs_uri or not gcs_uri.startswith("gs://"):
         raise HTTPException(404, "Output not available")
 
-    if upto_page is None:
-        return open(path, "r", encoding="utf-8").read()
+    # For now: return the GCS URI directly
+    # (signed URL support can be added later)
+    return {
+        "job_id": job_id,
+        "output_path": gcs_uri
+    }
 
-    result = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            result.append(line)
-            if line.startswith(f"=== Page {upto_page} ==="):
-                break
-
-    return "".join(result)

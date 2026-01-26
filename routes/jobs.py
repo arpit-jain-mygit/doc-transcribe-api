@@ -1,20 +1,11 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
 from services.redis_client import redis_client
 from services.queue import enqueue_job
 import uuid
 from datetime import datetime
-import os
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-# =====================================================
-# CONFIG
-# =====================================================
-OUTPUT_DIRS = [
-    "output_texts",   # OCR outputs
-    "transcripts",    # Transcription outputs
-]
 
 # =====================================================
 # OCR SUBMISSION
@@ -96,24 +87,3 @@ def cancel_job(job_id: str):
     )
 
     return {"job_id": job_id, "status": "CANCEL_REQUESTED"}
-
-# =====================================================
-# DOWNLOAD OUTPUT (✅ FIX)
-# =====================================================
-@router.get("/download/{filename}")
-def download_output(filename: str):
-    """
-    Download OCR or Transcription output file
-    """
-
-    for base_dir in OUTPUT_DIRS:
-        file_path = os.path.join(base_dir, filename)
-
-        if os.path.exists(file_path):
-            return FileResponse(
-                path=file_path,
-                media_type="text/plain",
-                filename=filename,
-            )
-
-    raise HTTPException(status_code=404, detail="File not found")
