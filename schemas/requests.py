@@ -1,8 +1,8 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
+from typing import Literal
 
-class OCRJobRequest(BaseModel):
-    local_path: str
-
-
-class TranscriptionJobRequest(BaseModel):
-    url: HttpUrl
+class JobRequest(BaseModel):
+    job_type: Literal["TRANSCRIBE", "OCR"]
+    input_type: Literal["FILE"]
+    gcs_uri: str
+    filename: str

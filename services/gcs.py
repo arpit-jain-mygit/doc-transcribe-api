@@ -1,55 +1,45 @@
-# services/gcs.py
-# -*- coding: utf-8 -*-
-
-import os
-import json
-import base64
-from datetime import timedelta
 from google.cloud import storage
+import logging
+import os
+from google.cloud import storage
+import datetime
 
-_client = None
+logger = logging.getLogger(__name__)
+
+client = storage.Client()
+BUCKET = os.environ["INPUT_BUCKET"]
+
+def upload_file_to_gcs(file_obj, object_name: str) -> str:
+    logger.info(f"GCS upload started: object={object_name}")
+
+    bucket = client.bucket(BUCKET)
+    blob = bucket.blob(object_name)
+    blob.upload_from_file(file_obj)
+
+    gcs_uri = f"gs://{BUCKET}/{object_name}"
+    logger.info(f"GCS upload completed: gcs_uri={gcs_uri}")
+
+    return gcs_uri
 
 
-def _get_client():
+
+client = storage.Client()
+
+def generate_signed_url(
+    bucket_name: str,
+    blob_path: str,
+    expiration_minutes: int = 60,
+) -> str:
     """
-    Create a GCS client using base64-encoded service account JSON
-    from GOOGLE_APPLICATION_CREDENTIALS_JSON (Render-safe).
+    Generate a signed URL for downloading an object.
     """
-    global _client
-    if _client is not None:
-        return _client
-
-    creds_b64 = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-
-    if not creds_b64:
-        raise RuntimeError(
-            "GOOGLE_APPLICATION_CREDENTIALS_JSON env var not set in API service"
-        )
-
-    creds = json.loads(base64.b64decode(creds_b64))
-    _client = storage.Client.from_service_account_info(creds)
-
-    return _client
-
-
-def generate_signed_url(gcs_uri: str, expires_minutes: int = 15) -> str:
-    if not gcs_uri.startswith("gs://"):
-        raise ValueError("Invalid GCS URI")
-
-    _, rest = gcs_uri.split("gs://", 1)
-    bucket_name, blob_name = rest.split("/", 1)
-
-    filename = blob_name.split("/")[-1]
-
-    client = _get_client()
     bucket = client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
+    blob = bucket.blob(blob_path)
 
-    return blob.generate_signed_url(
+    url = blob.generate_signed_url(
         version="v4",
-        expiration=timedelta(minutes=expires_minutes),
+        expiration=datetime.timedelta(minutes=expiration_minutes),
         method="GET",
-        response_disposition=f'attachment; filename="{filename}"',
-        response_type="text/plain",
     )
 
+    return url
