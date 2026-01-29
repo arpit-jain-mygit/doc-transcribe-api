@@ -1,38 +1,50 @@
-from google.cloud import storage
 import logging
 import os
-from google.cloud import storage
 import datetime
+from google.cloud import storage
 
 logger = logging.getLogger(__name__)
 
-client = storage.Client()
-BUCKET = os.environ["INPUT_BUCKET"]
+_client = None
+
+
+def get_gcs_client() -> storage.Client:
+    global _client
+    if _client is None:
+        _client = storage.Client()
+    return _client
+
+
+def get_input_bucket() -> str:
+    bucket = os.getenv("INPUT_BUCKET")
+    if not bucket:
+        raise RuntimeError("INPUT_BUCKET env var is not set")
+    return bucket
+
 
 def upload_file_to_gcs(file_obj, object_name: str) -> str:
-    logger.info(f"GCS upload started: object={object_name}")
+    bucket_name = get_input_bucket()
+    client = get_gcs_client()
 
-    bucket = client.bucket(BUCKET)
+    logger.info(f"GCS upload started: bucket={bucket_name}, object={object_name}")
+
+    bucket = client.bucket(bucket_name)
     blob = bucket.blob(object_name)
     blob.upload_from_file(file_obj)
 
-    gcs_uri = f"gs://{BUCKET}/{object_name}"
+    gcs_uri = f"gs://{bucket_name}/{object_name}"
     logger.info(f"GCS upload completed: gcs_uri={gcs_uri}")
 
     return gcs_uri
 
-
-
-client = storage.Client()
 
 def generate_signed_url(
     bucket_name: str,
     blob_path: str,
     expiration_minutes: int = 60,
 ) -> str:
-    """
-    Generate a signed URL for downloading an object.
-    """
+    client = get_gcs_client()
+
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_path)
 
