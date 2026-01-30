@@ -10,57 +10,51 @@ from services.gcs import upload_file_to_gcs
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-REDIS_URL = os.environ.get("REDIS_URL")
-if not REDIS_URL:
-    raise RuntimeError("REDIS_URL not set")
-
+REDIS_URL = os.environ["REDIS_URL"]
 r = redis.from_url(REDIS_URL, decode_responses=True)
-
 
 @router.post("/upload")
 async def upload(file: UploadFile = File(...)):
-    logger.info(f"[API] Upload request received: filename={file.filename}")
+    logger.info(f"Upload request received: filename={file.filename}")
 
-    try:
-        ext = os.path.splitext(file.filename)[1].lower()
-        job_id = uuid.uuid4().hex
+    job_id = uuid.uuid4().hex
+    ext = os.path.splitext(file.filename)[1]
+    object_name = f"inputs/{job_id}{ext}"
 
-        object_name = f"inputs/{job_id}{ext}"
-        logger.info(f"[API] Uploading to GCS: object={object_name}")
+    # 1️⃣ Upload to GCS
+    gcs_uri = upload_file_to_gcs(file.file, object_name)
 
-        gcs_uri = upload_file_to_gcs(file.file, object_name)
+    # 2️⃣ Create job payload
+    job = {
+        "job_id": job_id,
+        "job_type": "TRANSCRIBE" if ext.lower() != ".pdf" else "OCR",
+        "input_type": "FILE",
+        "gcs_uri": gcs_uri,
+        "filename": file.filename,
+    }
 
-        # 🔑 CREATE JOB PAYLOAD (what worker expects)
-        job = {
-            "job_id": job_id,
-            "job_type": "TRANSCRIBE" if ext != ".pdf" else "OCR",
-            "input_type": "FILE",
-            "gcs_uri": gcs_uri,
-            "filename": file.filename,
-        }
+    # 3️⃣ Write initial job status (THIS WAS MISSING)
+    r.hset(
+        f"job_status:{job_id}",
+        mapping={
+            "status": "QUEUED",
+            "stage": "Waiting in queue",
+            "progress": 0,
+            "eta_sec": 0,
+            "current_page": 0,
+            "total_pages": 0,
+            "output_uri": "",
+            "error": "",
+        },
+    )
 
-        # 🔑 WRITE INITIAL REDIS STATE
-        r.hset(
-            f"job:{job_id}",
-            mapping={
-                "status": "queued",
-                "progress": 0,
-                "output_uri": "",
-                "error": "",
-            },
-        )
+    # 4️⃣ Enqueue worker job
+    r.lpush("doc_jobs", json.dumps(job))
 
-        # 🔑 ENQUEUE FOR WORKER
-        r.lpush("doc_jobs", json.dumps(job))
+    logger.info(f"[API] Job created & enqueued: {job_id}")
 
-        logger.info(f"[API] Job enqueued: job_id={job_id}")
-
-        return {
-            "job_id": job_id,
-            "gcs_uri": gcs_uri,
-            "filename": file.filename,
-        }
-
-    except Exception:
-        logger.exception("[API] Upload failed")
-        raise
+    return {
+        "job_id": job_id,
+        "gcs_uri": gcs_uri,
+        "filename": file.filename,
+    }
