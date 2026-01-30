@@ -17,6 +17,7 @@ r = redis.from_url(REDIS_URL, decode_responses=True)
 async def upload(file: UploadFile = File(...)):
     logger.info(f"Upload request received: filename={file.filename}")
     logger.error("🔥🔥🔥 NEW UPLOAD HANDLER ACTIVE 🔥🔥🔥")
+    logger.error(f"🔎 Redis DB = {r.connection_pool.connection_kwargs.get('db')}")
 
     job_id = uuid.uuid4().hex
     ext = os.path.splitext(file.filename)[1]
