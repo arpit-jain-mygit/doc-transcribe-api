@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 import redis
 
 router = APIRouter()
-r = redis.Redis(host="REDIS_HOST", port=6379, decode_responses=True)
+r = redis.from_url("REDIS_URL", decode_responses=True)
 
 @router.get("/jobs/{job_id}")
 def job_status(job_id: str):
