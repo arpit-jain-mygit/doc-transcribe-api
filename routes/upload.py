@@ -4,6 +4,7 @@ import uuid
 import os
 
 from services.gcs import upload_file_to_gcs
+from services.jobs import create_job
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -12,21 +13,16 @@ logger = logging.getLogger(__name__)
 async def upload(file: UploadFile = File(...)):
     logger.info(f"Upload request received: filename={file.filename}")
 
-    try:
-        ext = os.path.splitext(file.filename)[1]
-        object_name = f"inputs/{uuid.uuid4().hex}{ext}"
+    ext = os.path.splitext(file.filename)[1]
+    job_id = uuid.uuid4().hex
+    object_name = f"inputs/{job_id}{ext}"
 
-        logger.info(f"Uploading to GCS: object={object_name}")
+    logger.info(f"Uploading to GCS: object={object_name}")
 
-        gcs_uri = upload_file_to_gcs(file.file, object_name)
+    gcs_uri = upload_file_to_gcs(file.file, object_name)
 
-        logger.info(f"Upload successful: gcs_uri={gcs_uri}")
+    job = create_job(job_id, gcs_uri)
 
-        return {
-            "gcs_uri": gcs_uri,
-            "filename": file.filename
-        }
+    logger.info(f"Job created: job_id={job_id}")
 
-    except Exception:
-        logger.exception("Upload failed")
-        raise
+    return job
