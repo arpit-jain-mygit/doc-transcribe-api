@@ -16,9 +16,11 @@ def get_status(job_id: str):
     if not data:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # FIX: normalize output field for UI
-    # prefer output_uri (GCS), fallback to output_path (local)
-    if "output_uri" in data:
-        data["output_path"] = data["output_uri"]
-
-    return data
+    return {
+        "status": data.get("status"),
+        "progress": int(data.get("progress", 0)),
+        "stage": data.get("stage"),
+        "eta_sec": data.get("eta_sec"),
+        "output_path": data.get("output_path"),  # 👈 exposed to UI
+        "updated_at": data.get("updated_at"),
+    }
