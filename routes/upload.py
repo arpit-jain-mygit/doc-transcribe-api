@@ -1,62 +1,54 @@
-from fastapi import APIRouter, UploadFile, File
-import logging
-import uuid
 import os
+import uuid
 import json
 import redis
-
-from services.gcs import upload_file_to_gcs
+import shutil
+from datetime import datetime
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
-REDIS_URL = os.environ["REDIS_URL"]
-r = redis.from_url(REDIS_URL, decode_responses=True)
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = os.path.abspath(UPLOAD_DIR)  # ✅ ABSOLUTE PATH
+
+r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+
 
 @router.post("/upload")
-async def upload(file: UploadFile = File(...)):
-    logger.info(f"Upload request received: filename={file.filename}")
-    logger.error("🔥🔥🔥 NEW UPLOAD HANDLER ACTIVE 🔥🔥🔥")
-    logger.error(f"🔎 Redis DB = {r.connection_pool.connection_kwargs.get('db')}")
+async def upload_file(
+    file: UploadFile = File(...),
+    type: str = Form(...)
+):
+    if type not in ("OCR", "TRANSCRIPTION"):
+        raise HTTPException(status_code=400, detail="Invalid job type")
 
     job_id = uuid.uuid4().hex
-    ext = os.path.splitext(file.filename)[1]
-    object_name = f"inputs/{job_id}{ext}"
+    filename = f"{job_id}_{file.filename}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
 
-    # 1️⃣ Upload to GCS
-    gcs_uri = upload_file_to_gcs(file.file, object_name)
+    with open(file_path, "wb") as out:
+        shutil.copyfileobj(file.file, out)
 
-    # 2️⃣ Create job payload
-    job = {
-        "job_id": job_id,
-        "job_type": "TRANSCRIBE" if ext.lower() != ".pdf" else "OCR",
-        "input_type": "FILE",
-        "gcs_uri": gcs_uri,
-        "filename": file.filename,
-    }
-
-    # 3️⃣ Write initial job status (THIS WAS MISSING)
+    # ✅ create QUEUED status
     r.hset(
         f"job_status:{job_id}",
         mapping={
             "status": "QUEUED",
-            "stage": "Waiting in queue",
             "progress": 0,
             "eta_sec": 0,
-            "current_page": 0,
-            "total_pages": 0,
-            "output_uri": "",
-            "error": "",
+            "updated_at": datetime.utcnow().isoformat(),
         },
     )
 
-    # 4️⃣ Enqueue worker job
-    r.lpush("doc_jobs", json.dumps(job))
-
-    logger.info(f"[API] Job created & enqueued: {job_id}")
-
-    return {
+    job = {
         "job_id": job_id,
-        "gcs_uri": gcs_uri,
-        "filename": file.filename,
+        "job_type": "OCR" if type == "OCR" else "TRANSCRIBE",
+        "input_path": file_path,   # ✅ ABSOLUTE
     }
+
+    r.rpush("doc_jobs", json.dumps(job))
+
+    return {"job_id": job_id}

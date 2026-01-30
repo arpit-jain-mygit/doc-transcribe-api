@@ -1,34 +1,24 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 
-from routes import jobs, status, dlq, health, upload
+from routes.upload import router as upload_router
+from routes.status import router as status_router
+from routes.health import router as health_router
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [API] %(levelname)s %(message)s",
-)
+app = FastAPI(title="Doc Transcribe API")
 
-app = FastAPI()
-
-# 🔥 CORS — THIS IS THE FIX
+# ✅ CORS FIX
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:4200",
-        "https://doc-transcribe.vercel.app",
+        "http://localhost:4200",   # Angular local
+        "https://doc-transcribe-ui.vercel.app",   # optional
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Routers
-app.include_router(health.router)
-app.include_router(upload.router)
-app.include_router(jobs.router)
-app.include_router(status.router)
-app.include_router(dlq.router)
+app.include_router(health_router)
+app.include_router(upload_router)
+app.include_router(status_router)
