@@ -3,22 +3,25 @@ import redis
 import os
 
 router = APIRouter()
-REDIS_URL = os.environ.get("REDIS_URL")
-if not REDIS_URL:
-    raise RuntimeError("REDIS_URL env var not set")
 
+REDIS_URL = os.environ["REDIS_URL"]
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
 @router.get("/jobs/{job_id}")
 def job_status(job_id: str):
-    key = f"job:{job_id}"
+    key = f"job_status:{job_id}"
+
     if not r.exists(key):
         raise HTTPException(404, "Job not found")
 
+    data = r.hgetall(key)
+
+    # normalize ints
+    for k in ["progress", "eta_sec", "current_page", "total_pages"]:
+        if k in data and data[k] is not None:
+            data[k] = int(data[k])
+
     return {
         "job_id": job_id,
-        "status": r.hget(key, "status"),
-        "progress": int(r.hget(key, "progress")),
-        "output_uri": r.hget(key, "output_uri"),
-        "error": r.hget(key, "error"),
+        **data,
     }
