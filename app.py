@@ -9,14 +9,13 @@ logging.basicConfig(
     format="%(asctime)s [API] %(levelname)s %(message)s",
 )
 
-logger = logging.getLogger(__name__)
-
 app = FastAPI()
 
+# 🔥 CORS — THIS IS THE FIX
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
+        "http://localhost:4200",
         "https://doc-transcribe.vercel.app",
     ],
     allow_credentials=True,
@@ -24,8 +23,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Routers
+app.include_router(health.router)
 app.include_router(upload.router)
 app.include_router(jobs.router)
 app.include_router(status.router)
 app.include_router(dlq.router)
-app.include_router(health.router)
