@@ -1,8 +1,13 @@
 from fastapi import APIRouter, HTTPException
 import redis
+import os
 
 router = APIRouter()
-r = redis.from_url("REDIS_URL", decode_responses=True)
+REDIS_URL = os.environ.get("REDIS_URL")
+if not REDIS_URL:
+    raise RuntimeError("REDIS_URL env var not set")
+
+r = redis.from_url(REDIS_URL, decode_responses=True)
 
 @router.get("/jobs/{job_id}")
 def job_status(job_id: str):
