@@ -16,12 +16,14 @@ def job_status(job_id: str):
 
     data = r.hgetall(key)
 
-    # normalize ints
-    for k in ["progress", "eta_sec", "current_page", "total_pages"]:
-        if k in data and data[k] is not None:
-            data[k] = int(data[k])
-
     return {
         "job_id": job_id,
-        **data,
+        "status": data.get("status", ""),
+        "stage": data.get("stage", ""),
+        "progress": int(data.get("progress") or 0),
+        "eta_sec": int(data.get("eta_sec") or 0),
+        "current_page": int(data.get("current_page") or 0),
+        "total_pages": int(data.get("total_pages") or 0),
+        "output_uri": data.get("output_uri") or "",
+        "error": data.get("error") or "",
     }

@@ -23,7 +23,6 @@ def create_job(payload: dict):
         "filename": payload["filename"],
     }
 
-    # ✅ USE job_status
     r.hset(
         f"job_status:{job_id}",
         mapping={
