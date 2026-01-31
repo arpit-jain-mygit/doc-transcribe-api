@@ -3,8 +3,12 @@ import uuid
 import json
 import redis
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from datetime import datetime
 
 from services.gcs import upload_file
+
+def log(msg: str):
+    print(f"[TRANSCRIBE {datetime.utcnow().isoformat()}] {msg}", flush=True)
 
 router = APIRouter()
 
@@ -31,6 +35,8 @@ async def upload(
     )
 
     # Initial job status
+    log("About to enqueue Redis job")
+
     r.hset(
         f"job_status:{job_id}",
         mapping={
