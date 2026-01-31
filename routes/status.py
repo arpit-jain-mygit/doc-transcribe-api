@@ -1,6 +1,7 @@
 import os
 import redis
 from fastapi import APIRouter, HTTPException
+from worker.utils.gcs import generate_signed_url
 
 router = APIRouter()
 
@@ -16,11 +17,16 @@ def get_status(job_id: str):
     if not data:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    return {
-        "status": data.get("status"),
-        "progress": int(data.get("progress", 0)),
-        "stage": data.get("stage"),
-        "eta_sec": data.get("eta_sec"),
-        "output_path": data.get("output_path"),  # 👈 exposed to UI
-        "updated_at": data.get("updated_at"),
-    }
+    # ✅ CREATE DOWNLOAD URL ONLY WHEN READY
+    if data.get("status") == "COMPLETED":
+        bucket = data.get("output_bucket")
+        blob = data.get("output_blob")
+
+        if bucket and blob:
+            data["output_path"] = generate_signed_url(
+                bucket_name=bucket,
+                blob_path=blob,
+                expiration_minutes=60,
+            )
+
+    return data
