@@ -1,54 +1,62 @@
 import os
 import uuid
 import json
+from fastapi import APIRouter, UploadFile, File, Form
 import redis
-import shutil
-from datetime import datetime
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+
+from worker.utils.gcs import upload_file
 
 router = APIRouter()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-UPLOAD_DIR = os.path.abspath(UPLOAD_DIR)  # ✅ ABSOLUTE PATH
-
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
+UPLOAD_TMP = "/tmp/uploads"
+os.makedirs(UPLOAD_TMP, exist_ok=True)
 
 @router.post("/upload")
-async def upload_file(
+async def upload(
     file: UploadFile = File(...),
     type: str = Form(...)
 ):
-    if type not in ("OCR", "TRANSCRIPTION"):
-        raise HTTPException(status_code=400, detail="Invalid job type")
-
     job_id = uuid.uuid4().hex
-    filename = f"{job_id}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, filename)
 
-    with open(file_path, "wb") as out:
-        shutil.copyfileobj(file.file, out)
+    # ----------------------------
+    # Save locally (TEMP ONLY)
+    # ----------------------------
+    local_path = os.path.join(UPLOAD_TMP, f"{job_id}_{file.filename}")
+    with open(local_path, "wb") as f:
+        f.write(await file.read())
 
-    # ✅ create QUEUED status
+    # ----------------------------
+    # Upload to GCS (SOURCE OF TRUTH)
+    # ----------------------------
+    gcs = upload_file(
+        local_path=local_path,
+        destination_path=f"jobs/{job_id}/input/{file.filename}",
+    )
+
+    # ----------------------------
+    # Init job status
+    # ----------------------------
     r.hset(
         f"job_status:{job_id}",
         mapping={
             "status": "QUEUED",
             "progress": 0,
-            "eta_sec": 0,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": "",
         },
     )
 
+    # ----------------------------
+    # Push job to Redis
+    # ----------------------------
     job = {
         "job_id": job_id,
-        "job_type": "OCR" if type == "OCR" else "TRANSCRIBE",
-        "input_path": file_path,   # ✅ ABSOLUTE
+        "job_type": type,
+        "input_gcs_uri": gcs["gcs_uri"],   # ✅ IMPORTANT
     }
 
-    r.rpush("doc_jobs", json.dumps(job))
+    r.lpush("doc_jobs", json.dumps(job))
 
     return {"job_id": job_id}
