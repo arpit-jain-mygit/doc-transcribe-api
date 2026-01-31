@@ -16,6 +16,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/cors-test")
+def cors_test():
+    return {"ok": True}
+
 app.include_router(health_router)
 app.include_router(upload_router)
 app.include_router(status_router)

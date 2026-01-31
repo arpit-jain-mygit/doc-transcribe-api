@@ -14,6 +14,7 @@ r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 UPLOAD_TMP = "/tmp/uploads"
 os.makedirs(UPLOAD_TMP, exist_ok=True)
 
+
 @router.post("/upload")
 async def upload(
     file: UploadFile = File(...),
