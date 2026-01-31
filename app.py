@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.upload import router as upload_router
 from routes.status import router as status_router
 from routes.health import router as health_router
+print("🔥 THIS app.py IS RUNNING 🔥")
 
 app = FastAPI(title="Doc Transcribe API")
 
