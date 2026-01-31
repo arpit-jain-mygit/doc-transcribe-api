@@ -1,3 +1,4 @@
+# routes/status.py
 import os
 import redis
 from fastapi import APIRouter, HTTPException, Depends
@@ -7,9 +8,6 @@ from services.gcs import generate_signed_url
 
 router = APIRouter()
 
-# =========================================================
-# REDIS
-# =========================================================
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -26,25 +24,13 @@ def get_status(
         raise HTTPException(status_code=404, detail="Job not found")
 
     # --------------------------------------------------
-    # 🔐 OWNER-ONLY ACCESS
+    # OWNER CHECK
     # --------------------------------------------------
-    owner = data.get("user")
-    if owner != user["email"]:
+    if data.get("user") != user["email"]:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # --------------------------------------------------
-    # 🛑 APPROVAL GATE
-    # --------------------------------------------------
-    approved = data.get("approved") == "true"
-
-    if not approved:
-        # Never leak output before approval
-        data.pop("output_path", None)
-        data["approved"] = "false"
-        return data
-
-    # --------------------------------------------------
-    # ✅ APPROVED → SIGNED DOWNLOAD URL
+    # SIGNED DOWNLOAD URL
     # --------------------------------------------------
     output_path = data.get("output_path")
 
@@ -52,13 +38,10 @@ def get_status(
         path = output_path.replace("gs://", "")
         bucket, blob = path.split("/", 1)
 
-        signed_url = generate_signed_url(
+        data["output_path"] = generate_signed_url(
             bucket_name=bucket,
             blob_path=blob,
             expires_days=1,
         )
 
-        data["output_path"] = signed_url
-
-    data["approved"] = "true"
     return data

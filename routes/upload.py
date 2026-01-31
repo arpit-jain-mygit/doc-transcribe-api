@@ -1,3 +1,4 @@
+# routes/upload.py
 import os
 import uuid
 import json
@@ -6,7 +7,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 
-from services.gcs import upload_file   # ✅ expects file_obj
+from services.gcs import upload_file
 from services.auth import verify_google_token
 
 router = APIRouter()
@@ -34,7 +35,7 @@ async def upload(
     log(f"User={user['email']} Job={job_id}")
 
     # -------------------------------------------------
-    # ✅ CORRECT: upload from file object (not local path)
+    # Upload input file to GCS (STREAM SAFE)
     # -------------------------------------------------
     gcs = upload_file(
         file_obj=file.file,
@@ -42,22 +43,18 @@ async def upload(
     )
 
     # -------------------------------------------------
-    # Initial job status (approval-aware)
+    # Job status
     # -------------------------------------------------
     r.hset(
         f"job_status:{job_id}",
         mapping={
             "status": "QUEUED",
             "progress": 0,
-            "approved": "false",
             "user": user["email"],
             "updated_at": datetime.utcnow().isoformat(),
         },
     )
 
-    # -------------------------------------------------
-    # Enqueue job
-    # -------------------------------------------------
     payload = {
         "job_id": job_id,
         "job_type": type,
