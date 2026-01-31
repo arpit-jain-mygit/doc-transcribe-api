@@ -5,7 +5,11 @@ from routes.upload import router as upload_router
 from routes.status import router as status_router
 from routes.health import router as health_router
 
+from routes.auth import router as auth_router
+
+
 app = FastAPI(title="Doc Transcribe API")
+app.include_router(auth_router)
 
 # CORS (safe for now)
 app.add_middleware(

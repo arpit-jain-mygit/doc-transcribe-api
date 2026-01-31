@@ -2,7 +2,7 @@ import os
 import uuid
 import json
 import redis
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header
 from datetime import datetime
 
 from services.gcs import upload_file
@@ -22,7 +22,22 @@ QUEUE_NAME = "doc_jobs"
 async def upload(
     file: UploadFile = File(...),
     type: str = Form(...),
+    authorization: str = Header(None),   # ✅ ADD
 ):
+    # --------------------------------------------------
+    # AUTH CHECK (TEMP – presence only)
+    # --------------------------------------------------
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    # OPTIONAL: strip Bearer
+    token = authorization.replace("Bearer ", "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid Authorization token")
+
+    # --------------------------------------------------
+    # EXISTING LOGIC (UNCHANGED)
+    # --------------------------------------------------
     if type not in ("OCR", "TRANSCRIPTION"):
         raise HTTPException(status_code=400, detail="Invalid job type")
 
@@ -34,7 +49,6 @@ async def upload(
         destination_path=f"jobs/{job_id}/input/{file.filename}",
     )
 
-    # Initial job status
     log("About to enqueue Redis job")
 
     r.hset(
@@ -46,7 +60,6 @@ async def upload(
         },
     )
 
-    # Push job to Redis queue
     payload = {
         "job_id": job_id,
         "job_type": type,
