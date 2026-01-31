@@ -12,7 +12,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:4200",   # Angular local
-        "https://doc-transcribe-ui.vercel.app",   # optional
+        "https://doc-transcribe-ui*.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
