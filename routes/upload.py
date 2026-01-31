@@ -4,9 +4,10 @@ import json
 import redis
 from datetime import datetime
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 
 from services.gcs import upload_file
+from services.auth import verify_google_token
 
 router = APIRouter()
 
@@ -24,17 +25,14 @@ def log(msg: str):
 async def upload(
     file: UploadFile = File(...),
     type: str = Form(...),
-    authorization: str = Header(None),
+    user=Depends(verify_google_token),
 ):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-
     if type not in ("OCR", "TRANSCRIPTION"):
         raise HTTPException(status_code=400, detail="Invalid job type")
 
     job_id = uuid.uuid4().hex
 
-    log(f"Uploading input file for job {job_id}")
+    log(f"User={user['email']} Job={job_id}")
 
     gcs = upload_file(
         file_obj=file.file,
@@ -47,6 +45,7 @@ async def upload(
             "status": "QUEUED",
             "progress": 0,
             "updated_at": datetime.utcnow().isoformat(),
+            "user": user["email"],
         },
     )
 
@@ -58,7 +57,5 @@ async def upload(
     }
 
     r.rpush(QUEUE_NAME, json.dumps(payload))
-
-    log(f"Job enqueued: {job_id}")
 
     return {"job_id": job_id}
