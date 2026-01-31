@@ -1,41 +1,45 @@
-import logging
+# -*- coding: utf-8 -*-
+
 import os
+import json
+import base64
 import datetime
 from google.cloud import storage
-
-logger = logging.getLogger(__name__)
 
 _client = None
 
 
-def get_gcs_client() -> storage.Client:
+def _get_client():
     global _client
-    if _client is None:
+    if _client:
+        return _client
+
+    creds_b64 = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if creds_b64:
+        creds = json.loads(base64.b64decode(creds_b64))
+        _client = storage.Client.from_service_account_info(creds)
+    else:
         _client = storage.Client()
+
     return _client
 
 
-def get_input_bucket() -> str:
-    bucket = os.getenv("INPUT_BUCKET")
-    if not bucket:
-        raise RuntimeError("INPUT_BUCKET env var is not set")
-    return bucket
+def upload_text(*, content: str, destination_path: str) -> dict:
+    bucket_name = os.getenv("GCS_BUCKET_NAME")
+    if not bucket_name:
+        raise RuntimeError("GCS_BUCKET_NAME not set")
 
-
-def upload_file_to_gcs(file_obj, object_name: str) -> str:
-    bucket_name = get_input_bucket()
-    client = get_gcs_client()
-
-    logger.info(f"GCS upload started: bucket={bucket_name}, object={object_name}")
-
+    client = _get_client()
     bucket = client.bucket(bucket_name)
-    blob = bucket.blob(object_name)
-    blob.upload_from_file(file_obj)
+    blob = bucket.blob(destination_path)
 
-    gcs_uri = f"gs://{bucket_name}/{object_name}"
-    logger.info(f"GCS upload completed: gcs_uri={gcs_uri}")
+    blob.upload_from_string(content, content_type="text/plain; charset=utf-8")
 
-    return gcs_uri
+    return {
+        "bucket": bucket_name,
+        "blob": destination_path,
+        "gcs_uri": f"gs://{bucket_name}/{destination_path}",
+    }
 
 
 def generate_signed_url(
@@ -43,15 +47,12 @@ def generate_signed_url(
     blob_path: str,
     expiration_minutes: int = 60,
 ) -> str:
-    client = get_gcs_client()
-
+    client = _get_client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_path)
 
-    url = blob.generate_signed_url(
+    return blob.generate_signed_url(
         version="v4",
         expiration=datetime.timedelta(minutes=expiration_minutes),
         method="GET",
     )
-
-    return url

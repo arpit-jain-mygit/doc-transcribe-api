@@ -1,7 +1,7 @@
 import os
 import redis
 from fastapi import APIRouter, HTTPException
-from worker.utils.gcs import generate_signed_url
+from services.gcs import generate_signed_url
 
 router = APIRouter()
 
