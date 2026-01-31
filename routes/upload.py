@@ -31,11 +31,10 @@ async def upload(
         raise HTTPException(status_code=400, detail="Invalid job type")
 
     job_id = uuid.uuid4().hex
-
     log(f"User={user['email']} Job={job_id}")
 
     gcs = upload_file(
-        file_obj=file.file,
+        local_path=file.file.name if hasattr(file.file, "name") else None,
         destination_path=f"jobs/{job_id}/input/{file.filename}",
     )
 
@@ -44,8 +43,9 @@ async def upload(
         mapping={
             "status": "QUEUED",
             "progress": 0,
-            "updated_at": datetime.utcnow().isoformat(),
+            "approved": "false",      # ✅ APPROVAL FLAG
             "user": user["email"],
+            "updated_at": datetime.utcnow().isoformat(),
         },
     )
 
