@@ -77,7 +77,8 @@ async def upload(
         json.dumps({
             "job_id": job_id,
             "job_type": type,
-            "input_path": local_path,
+            "input_path": local_path,  # keep (local/dev)
+            "input_gcs_uri": gcs_uri,  # ✅ REQUIRED BY WORKER
         }),
     )
 
