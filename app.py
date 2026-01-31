@@ -10,11 +10,8 @@ app = FastAPI(title="Doc Transcribe API")
 # ✅ CORS FIX
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:4200",   # Angular local
-        "https://*.vercel.app",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
