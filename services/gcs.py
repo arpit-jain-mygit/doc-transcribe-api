@@ -24,6 +24,9 @@ def _get_client():
     return _client
 
 
+# =========================================================
+# TEXT UPLOAD (USED BY WORKER OUTPUT)
+# =========================================================
 def upload_text(*, content: str, destination_path: str) -> dict:
     bucket_name = os.getenv("GCS_BUCKET_NAME")
     if not bucket_name:
@@ -33,7 +36,10 @@ def upload_text(*, content: str, destination_path: str) -> dict:
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(destination_path)
 
-    blob.upload_from_string(content, content_type="text/plain; charset=utf-8")
+    blob.upload_from_string(
+        content,
+        content_type="text/plain; charset=utf-8",
+    )
 
     return {
         "bucket": bucket_name,
@@ -42,6 +48,33 @@ def upload_text(*, content: str, destination_path: str) -> dict:
     }
 
 
+# =========================================================
+# FILE UPLOAD (USED BY API /upload)
+# =========================================================
+def upload_file(file_obj, destination_path: str) -> dict:
+    """
+    file_obj: file-like object (UploadFile.file)
+    """
+    bucket_name = os.getenv("GCS_BUCKET_NAME")
+    if not bucket_name:
+        raise RuntimeError("GCS_BUCKET_NAME not set")
+
+    client = _get_client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(destination_path)
+
+    blob.upload_from_file(file_obj)
+
+    return {
+        "bucket": bucket_name,
+        "blob": destination_path,
+        "gcs_uri": f"gs://{bucket_name}/{destination_path}",
+    }
+
+
+# =========================================================
+# SIGNED DOWNLOAD URL (USED BY STATUS ENDPOINT)
+# =========================================================
 def generate_signed_url(
     bucket_name: str,
     blob_path: str,

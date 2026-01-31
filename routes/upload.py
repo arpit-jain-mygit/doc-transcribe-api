@@ -9,7 +9,7 @@ from datetime import datetime
 import redis
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
-from services.gcs import upload_file_to_gcs  # ✅ EXACT FUNCTION
+from services.gcs import upload_file  # ✅ EXACT FUNCTION
 
 router = APIRouter()
 
