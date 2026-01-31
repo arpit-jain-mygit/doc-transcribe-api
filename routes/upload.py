@@ -4,7 +4,7 @@ import json
 from fastapi import APIRouter, UploadFile, File, Form
 import redis
 
-from worker.utils.gcs import upload_file
+from services.gcs import upload_file_to_gcs
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ async def upload(
     # ----------------------------
     # Upload to GCS (SOURCE OF TRUTH)
     # ----------------------------
-    gcs = upload_file(
+    gcs = upload_file_to_gcs(
         local_path=local_path,
         destination_path=f"jobs/{job_id}/input/{file.filename}",
     )
