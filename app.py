@@ -10,8 +10,6 @@ from routes.auth import router as auth_router
 from routes.approve import router as approve_router
 
 app = FastAPI(title="Doc Transcribe API")
-app.include_router(auth_router)
-
 # CORS (safe for now)
 app.add_middleware(
     CORSMiddleware,
@@ -20,6 +18,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 @app.get("/cors-test")
 def cors_test():
