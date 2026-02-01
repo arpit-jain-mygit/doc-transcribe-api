@@ -34,11 +34,13 @@ async def upload(
     job_id = uuid.uuid4().hex
     log(f"User={user['email']} Job={job_id}")
 
+    # Upload input file to GCS (stream-safe)
     gcs = upload_file(
         file_obj=file.file,
         destination_path=f"jobs/{job_id}/input/{file.filename}",
     )
 
+    # Initial job status (NO APPROVAL CONCEPT)
     r.hset(
         f"job_status:{job_id}",
         mapping={

@@ -23,9 +23,11 @@ def get_status(
     if not data:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    # Owner-only access
     if data.get("user") != user["email"]:
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    # Convert gs:// → signed HTTPS when completed
     output_path = data.get("output_path")
 
     if output_path and output_path.startswith("gs://"):
