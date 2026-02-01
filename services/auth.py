@@ -5,9 +5,6 @@ from fastapi import HTTPException, Header
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
-# =========================================================
-# CONFIG
-# =========================================================
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -35,18 +32,21 @@ def verify_google_token(authorization: str = Header(None)) -> dict:
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid Google token")
 
-    email = payload.get("email", "").lower()
+    email = payload.get("email")
     if not email:
         raise HTTPException(status_code=401, detail="Email not found in token")
 
-    # --------------------------------------------------
-    # APPROVAL LOGIC
-    # --------------------------------------------------
+    email = email.lower()
+
+    # -------------------------------
+    # Redis-based approval check
+    # -------------------------------
     if r.sismember(APPROVED_SET, email):
         return payload
 
-    # First-time or pending user
-    r.sadd(PENDING_SET, email)
+    # Add to pending ONLY once
+    if not r.sismember(PENDING_SET, email):
+        r.sadd(PENDING_SET, email)
 
     raise HTTPException(
         status_code=403,
