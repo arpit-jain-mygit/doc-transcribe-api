@@ -16,8 +16,8 @@ if not GOOGLE_CLIENT_ID:
 def google_auth(payload: dict):
     """
     Optional endpoint.
-    Used only to verify token from frontend (debug / UI confirmation).
-    NOT used for authorization (that happens via Depends).
+    Used only to confirm identity on frontend.
+    Does NOT grant access.
     """
     token = payload.get("id_token")
     if not token:
@@ -33,7 +33,6 @@ def google_auth(payload: dict):
         raise HTTPException(status_code=401, detail="Invalid Google token")
 
     return {
-        "user_id": info.get("sub"),
         "email": info.get("email"),
         "name": info.get("name"),
     }

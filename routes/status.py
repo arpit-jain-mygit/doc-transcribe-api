@@ -23,15 +23,9 @@ def get_status(
     if not data:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # --------------------------------------------------
-    # OWNER CHECK
-    # --------------------------------------------------
     if data.get("user") != user["email"]:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # --------------------------------------------------
-    # SIGNED DOWNLOAD URL
-    # --------------------------------------------------
     output_path = data.get("output_path")
 
     if output_path and output_path.startswith("gs://"):
