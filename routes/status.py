@@ -23,7 +23,7 @@ def get_status(
     if not data:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if data.get("user") != user["email"]:
+    if data.get("user") != user["email"].lower():
         raise HTTPException(status_code=403, detail="Forbidden")
 
     output_path = data.get("output_path")

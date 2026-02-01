@@ -32,24 +32,32 @@ async def upload(
         raise HTTPException(status_code=400, detail="Invalid job type")
 
     job_id = uuid.uuid4().hex
-    log(f"User={user['email']} Job={job_id}")
+    email = user["email"].lower()
 
-    # Upload input file to GCS (stream-safe)
+    log(f"User={email} Job={job_id}")
+
+    # Upload input to GCS (stream-safe)
     gcs = upload_file(
         file_obj=file.file,
         destination_path=f"jobs/{job_id}/input/{file.filename}",
     )
 
-    # Initial job status (NO APPROVAL CONCEPT)
+    # Job status
     r.hset(
         f"job_status:{job_id}",
         mapping={
             "status": "QUEUED",
+            "stage": "Queued",
             "progress": 0,
-            "user": user["email"],
+            "user": email,
+            "job_type": type,
+            "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
         },
     )
+
+    # 🔑 USER → JOB INDEX (NEW)
+    r.lpush(f"user_jobs:{email}", job_id)
 
     payload = {
         "job_id": job_id,

@@ -1,43 +1,41 @@
-from fastapi import APIRouter
-import uuid
-import json
-import redis
-import logging
+# routes/jobs.py
 import os
+import redis
+from fastapi import APIRouter, Depends
+
+from services.auth import verify_google_token
+from services.gcs import generate_signed_url
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
-REDIS_URL = os.environ["REDIS_URL"]
-r = redis.from_url(REDIS_URL, decode_responses=True)
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
-@router.post("/jobs")
-def create_job(payload: dict):
-    job_id = payload.get("job_id") or uuid.uuid4().hex
 
-    job = {
-        "job_id": job_id,
-        "job_type": payload["job_type"],
-        "input_type": payload["input_type"],
-        "gcs_uri": payload["gcs_uri"],
-        "filename": payload["filename"],
-    }
+@router.get("/jobs")
+def list_jobs(user=Depends(verify_google_token)):
+    email = user["email"].lower()
+    job_ids = r.lrange(f"user_jobs:{email}", 0, -1)
 
-    r.hset(
-        f"job_status:{job_id}",
-        mapping={
-            "status": "QUEUED",
-            "stage": "Waiting in queue",
-            "progress": 0,
-            "eta_sec": 0,
-            "current_page": 0,
-            "total_pages": 0,
-            "output_uri": "",
-            "error": "",
-        },
-    )
+    jobs = []
 
-    r.lpush("doc_jobs", json.dumps(job))
+    for job_id in job_ids:
+        data = r.hgetall(f"job_status:{job_id}")
+        if not data:
+            continue
 
-    logger.info(f"[API] Job enqueued: {job_id}")
-    return {"job_id": job_id}
+        output_path = data.get("output_path")
+        if output_path and output_path.startswith("gs://"):
+            path = output_path.replace("gs://", "")
+            bucket, blob = path.split("/", 1)
+
+            data["output_path"] = generate_signed_url(
+                bucket_name=bucket,
+                blob_path=blob,
+                expiration_minutes=60,
+            )
+
+        data["job_id"] = job_id
+        jobs.append(data)
+
+    return jobs
