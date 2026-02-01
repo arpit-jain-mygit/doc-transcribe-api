@@ -6,12 +6,15 @@ import base64
 import datetime
 from google.cloud import storage
 
+# =========================================================
+# LAZY CLIENT
+# =========================================================
 _client = None
 
 
 def _get_client():
     global _client
-    if _client:
+    if _client is not None:
         return _client
 
     creds_b64 = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
@@ -24,7 +27,14 @@ def _get_client():
     return _client
 
 
-def upload_file(file_obj, destination_path: str) -> dict:
+# =========================================================
+# UPLOAD FILE (STREAM SAFE)
+# =========================================================
+def upload_file(
+    *,
+    file_obj,
+    destination_path: str,
+) -> dict:
     bucket_name = os.getenv("GCS_BUCKET_NAME")
     if not bucket_name:
         raise RuntimeError("GCS_BUCKET_NAME not set")
@@ -33,6 +43,7 @@ def upload_file(file_obj, destination_path: str) -> dict:
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(destination_path)
 
+    # IMPORTANT: stream upload (UploadFile.file)
     blob.upload_from_file(file_obj)
 
     return {
@@ -42,7 +53,14 @@ def upload_file(file_obj, destination_path: str) -> dict:
     }
 
 
-def upload_text(*, content: str, destination_path: str) -> dict:
+# =========================================================
+# UPLOAD TEXT
+# =========================================================
+def upload_text(
+    *,
+    content: str,
+    destination_path: str,
+) -> dict:
     bucket_name = os.getenv("GCS_BUCKET_NAME")
     if not bucket_name:
         raise RuntimeError("GCS_BUCKET_NAME not set")
@@ -63,17 +81,48 @@ def upload_text(*, content: str, destination_path: str) -> dict:
     }
 
 
+# =========================================================
+# SIGNED URL (USED BY status.py)
+# =========================================================
 def generate_signed_url(
+    *,
     bucket_name: str,
     blob_path: str,
-    expiration_minutes: int = 60,
+    expires_days: int = 1,
 ) -> str:
+    """
+    Generate browser-downloadable HTTPS URL.
+    """
     client = _get_client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_path)
 
     return blob.generate_signed_url(
         version="v4",
-        expiration=datetime.timedelta(minutes=expiration_minutes),
+        expiration=datetime.timedelta(days=expires_days),
         method="GET",
     )
+
+
+# =========================================================
+# DOWNLOAD FROM GCS (WORKER)
+# =========================================================
+def download_from_gcs(gcs_uri: str) -> str:
+    """
+    Download a GCS object to /tmp and return local path.
+    """
+    if not gcs_uri.startswith("gs://"):
+        raise ValueError(f"Invalid GCS URI: {gcs_uri}")
+
+    client = _get_client()
+
+    path = gcs_uri.replace("gs://", "")
+    bucket_name, blob_path = path.split("/", 1)
+
+    local_path = f"/tmp/{os.path.basename(blob_path)}"
+
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_path)
+    blob.download_to_filename(local_path)
+
+    return local_path
