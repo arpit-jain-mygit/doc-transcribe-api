@@ -11,21 +11,14 @@ from routes.jobs import router as jobs_router
 
 app = FastAPI(title="Doc Transcribe API")
 
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://doc-transcribe-ui.vercel.app",
-        "http://localhost:5173",   # optional local dev
-    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=[
-        "Authorization",
-        "Content-Type",
-        "Accept",
-    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 
 
 app.include_router(auth_router)
