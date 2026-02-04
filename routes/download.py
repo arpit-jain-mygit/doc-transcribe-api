@@ -1,18 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from google.cloud import storage
-from auth import verify_google_token
+from services.auth import verify_google_token
 import io
-
+import redis
 router = APIRouter()
+import os
 
 @router.get("/download/{job_id}")
 def download_job_output(
     job_id: str,
     user=Depends(verify_google_token),
 ):
-    from redis_client import r  # use your actual redis import
-
+     # use your actual redis import
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
     job = r.hgetall(f"job_status:{job_id}")
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
