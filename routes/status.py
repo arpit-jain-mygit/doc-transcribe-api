@@ -32,10 +32,13 @@ def get_status(
         path = output_path.replace("gs://", "")
         bucket, blob = path.split("/", 1)
 
-        data["output_path"] = generate_signed_url(
+        signed_url = generate_signed_url(
             bucket_name=bucket,
             blob_path=blob,
             expiration_minutes=60,
         )
+
+        # ✅ UI contract
+        data["download_url"] = signed_url
 
     return data
