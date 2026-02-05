@@ -3,7 +3,7 @@ import time
 import logging
 from datetime import datetime
 
-from redis_client import redis_client
+from services.redis_client import redis_client
 
 logger = logging.getLogger("api.upload")
 
