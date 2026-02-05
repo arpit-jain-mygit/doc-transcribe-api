@@ -1,26 +1,49 @@
+# routes/upload.py
+import os
+import uuid
 import json
-import time
-import logging
+import redis
 from datetime import datetime
 
-from services.redis_client import redis_client
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 
-logger = logging.getLogger("api.upload")
+from services.gcs import upload_file
+from services.auth import verify_google_token
+
+router = APIRouter()
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 QUEUE_NAME = "doc_jobs"
 
-async def upload_file(job, job_id, email, type):
-    """
-    This function wraps your existing upload logic.
-    ONLY LOGS are added.
-    """
 
-    logger.info(f"[UPLOAD] Starting upload job_id={job_id} user={email}")
+def log(msg: str):
+    print(f"[UPLOAD {datetime.utcnow().isoformat()}] {msg}", flush=True)
 
-    # -----------------------------------------------------
-    # JOB STATUS INIT
-    # -----------------------------------------------------
-    redis_client.hset(
+
+@router.post("/upload")
+async def upload(
+    file: UploadFile = File(...),
+    type: str = Form(...),
+    user=Depends(verify_google_token),
+):
+    if type not in ("OCR", "TRANSCRIPTION"):
+        raise HTTPException(status_code=400, detail="Invalid job type")
+
+    job_id = uuid.uuid4().hex
+    email = user["email"].lower()
+
+    log(f"User={email} Job={job_id}")
+
+    # Upload input to GCS (stream-safe)
+    gcs = upload_file(
+        file_obj=file.file,
+        destination_path=f"jobs/{job_id}/input/{file.filename}",
+    )
+
+    # Job status
+    r.hset(
         f"job_status:{job_id}",
         mapping={
             "status": "QUEUED",
@@ -33,41 +56,16 @@ async def upload_file(job, job_id, email, type):
         },
     )
 
-    logger.info(f"[UPLOAD] Job status initialized job_id={job_id}")
+    # 🔑 USER → JOB INDEX (NEW)
+    r.lpush(f"user_jobs:{email}", job_id)
 
-    # -----------------------------------------------------
-    # ENQUEUE JOB
-    # -----------------------------------------------------
-    logger.info(f"[UPLOAD] Enqueuing job_id={job_id}")
+    payload = {
+        "job_id": job_id,
+        "job_type": type,
+        "input_gcs_uri": gcs["gcs_uri"],
+        "filename": file.filename,
+    }
 
-    redis_client.lpush(QUEUE_NAME, json.dumps(job))
+    r.rpush(QUEUE_NAME, json.dumps(payload))
 
-    # -----------------------------------------------------
-    # QUEUE DEPTH CONFIRMATION
-    # -----------------------------------------------------
-    try:
-        depth = redis_client.llen(QUEUE_NAME)
-        logger.info(
-            f"[UPLOAD] Job enqueued job_id={job_id} queue_depth={depth}"
-        )
-    except Exception as e:
-        logger.error(
-            f"[UPLOAD] Failed to read queue depth job_id={job_id}: {e}"
-        )
-
-    # -----------------------------------------------------
-    # REDIS HEALTH AFTER ENQUEUE
-    # -----------------------------------------------------
-    try:
-        t0 = time.time()
-        redis_client.ping()
-        ms = int((time.time() - t0) * 1000)
-        logger.info(
-            f"[UPLOAD] Redis ping OK after enqueue latency={ms}ms"
-        )
-    except Exception as e:
-        logger.error(
-            f"[UPLOAD] Redis ping FAILED after enqueue job_id={job_id}: {e}"
-        )
-
-    logger.info(f"[UPLOAD] Upload flow finished job_id={job_id}")
+    return {"job_id": job_id}
