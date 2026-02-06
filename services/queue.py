@@ -18,20 +18,6 @@ QUEUE_NAME = "doc_jobs"
 
 
 def enqueue_job(job_id: str, job: dict):
-    key = f"job_status:{job_id}"
-
-    # 1️⃣ Initialize job status
-    r.hset(
-        key,
-        mapping={
-            "status": "QUEUED",
-            "progress": 0,
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
-        },
-    )
-
-    # 2️⃣ Push job to queue
     payload = job.copy()
     payload["job_id"] = job_id
 
