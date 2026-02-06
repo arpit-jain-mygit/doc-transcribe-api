@@ -83,14 +83,44 @@ class YoutubeRequest(BaseModel):
 @router.post("/youtube")
 async def submit_youtube(
     payload: YoutubeRequest,
-    token: str = Depends(verify_token),
+    user=Depends(verify_google_token),  # 🔑 SAME AS /upload
 ):
     job_id = create_job_id()
+    email = user["email"].lower()
 
+    log(f"YouTube job submit user={email} job_id={job_id}")
+
+    # -------------------------------------------------
+    # 1. CREATE INITIAL JOB STATUS (CRITICAL)
+    # -------------------------------------------------
+    r.hset(
+        f"job_status:{job_id}",
+        mapping={
+            "status": "QUEUED",
+            "stage": "Queued",
+            "progress": 0,
+            "user": email,              # 🔑 REQUIRED FOR /status
+            "job_type": payload.type,
+            "source": "youtube",
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+        },
+    )
+
+    # -------------------------------------------------
+    # 2. USER → JOB INDEX (CONSISTENT WITH /upload)
+    # -------------------------------------------------
+    r.lpush(f"user_jobs:{email}", job_id)
+
+    # -------------------------------------------------
+    # 3. ENQUEUE WORKER PAYLOAD
+    # -------------------------------------------------
     job = {
+        "job_id": job_id,
         "source": "youtube",
         "url": payload.url,
         "type": payload.type,
+        "email": email,               # 🔑 PROPAGATES OWNERSHIP
     }
 
     enqueue_job(job_id, job)
