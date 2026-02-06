@@ -9,6 +9,11 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 
 from services.gcs import upload_file
 from services.auth import verify_google_token
+from services.queue import enqueue_job
+
+from utils.jobs import create_job_id
+from auth import verify_token
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -67,5 +72,27 @@ async def upload(
     }
 
     r.rpush(QUEUE_NAME, json.dumps(payload))
+
+    return {"job_id": job_id}
+
+class YoutubeRequest(BaseModel):
+    url: str
+    type: str = "TRANSCRIPTION"
+
+
+@router.post("/youtube")
+async def submit_youtube(
+    payload: YoutubeRequest,
+    token: str = Depends(verify_token),
+):
+    job_id = create_job_id()
+
+    job = {
+        "source": "youtube",
+        "url": payload.url,
+        "type": payload.type,
+    }
+
+    enqueue_job(job_id, job)
 
     return {"job_id": job_id}
