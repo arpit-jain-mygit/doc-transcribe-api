@@ -14,7 +14,7 @@ r = redis.Redis.from_url(
     retry_on_timeout=True,
 )
 
-QUEUE_NAME = "doc_jobs"
+QUEUE_NAME = os.getenv("QUEUE_NAME", "doc_jobs")
 
 
 def enqueue_job(job_id: str, job: dict):

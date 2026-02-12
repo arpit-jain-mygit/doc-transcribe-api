@@ -1,13 +1,18 @@
 # app.py
+import os
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load env before importing route modules that read os.getenv at import time.
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from routes.upload import router as upload_router
 from routes.status import router as status_router
 from routes.health import router as health_router
 from routes.auth import router as auth_router
 from routes.jobs import router as jobs_router
-
 
 app = FastAPI(title="Doc Transcribe API")
 
