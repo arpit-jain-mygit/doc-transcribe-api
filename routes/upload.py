@@ -53,15 +53,14 @@ async def upload(
 
     log(f"User={email} Job={job_id}")
 
-    # Upload input to GCS (stream-safe)
     gcs = upload_file(
         file_obj=file.file,
         destination_path=f"jobs/{job_id}/input/{file.filename}",
     )
 
     output_filename = make_output_filename(file.filename)
+    source = "ocr" if type == "OCR" else "file"
 
-    # Job status
     r.hset(
         f"job_status:{job_id}",
         mapping={
@@ -70,6 +69,7 @@ async def upload(
             "progress": 0,
             "user": email,
             "job_type": type,
+            "source": source,
             "input_filename": file.filename,
             "output_filename": output_filename,
             "created_at": datetime.utcnow().isoformat(),
@@ -77,12 +77,12 @@ async def upload(
         },
     )
 
-    # USER -> JOB INDEX
     r.lpush(f"user_jobs:{email}", job_id)
 
     payload = {
         "job_id": job_id,
         "job_type": type,
+        "source": source,
         "input_gcs_uri": gcs["gcs_uri"],
         "filename": file.filename,
         "output_filename": output_filename,
@@ -101,14 +101,13 @@ class YoutubeRequest(BaseModel):
 @router.post("/youtube")
 async def submit_youtube(
     payload: YoutubeRequest,
-    user=Depends(verify_google_token),  # SAME AS /upload
+    user=Depends(verify_google_token),
 ):
     job_id = create_job_id()
     email = user["email"].lower()
 
     log(f"YouTube job submit user={email} job_id={job_id}")
 
-    # 1. CREATE INITIAL JOB STATUS
     r.hset(
         f"job_status:{job_id}",
         mapping={
@@ -123,10 +122,8 @@ async def submit_youtube(
         },
     )
 
-    # 2. USER -> JOB INDEX
     r.lpush(f"user_jobs:{email}", job_id)
 
-    # 3. ENQUEUE WORKER PAYLOAD
     job = {
         "job_id": job_id,
         "source": "youtube",
