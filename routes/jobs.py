@@ -28,12 +28,18 @@ def list_jobs(user=Depends(verify_google_token)):
         if output_path and output_path.startswith("gs://"):
             path = output_path.replace("gs://", "")
             bucket, blob = path.split("/", 1)
+            filename = os.path.basename(blob) or "transcript.txt"
 
-            data["output_path"] = generate_signed_url(
+            signed_url = generate_signed_url(
                 bucket_name=bucket,
                 blob_path=blob,
                 expiration_minutes=60,
+                download_filename=filename,
             )
+
+            # Keep existing UI compatibility.
+            data["output_path"] = signed_url
+            data["download_url"] = signed_url
 
         data["job_id"] = job_id
         jobs.append(data)

@@ -77,6 +77,7 @@ def generate_signed_url(
     bucket_name: str,
     blob_path: str,
     expiration_minutes: int = 60,
+    download_filename: str | None = None,
 ) -> str:
     client = _get_client()
     bucket = client.bucket(bucket_name)
@@ -86,4 +87,9 @@ def generate_signed_url(
         version="v4",
         expiration=timedelta(minutes=expiration_minutes),
         method="GET",
+        response_disposition=(
+            f'attachment; filename="{download_filename}"'
+            if download_filename
+            else None
+        ),
     )

@@ -31,14 +31,16 @@ def get_status(
     if output_path and output_path.startswith("gs://"):
         path = output_path.replace("gs://", "")
         bucket, blob = path.split("/", 1)
+        filename = os.path.basename(blob) or "transcript.txt"
 
         signed_url = generate_signed_url(
             bucket_name=bucket,
             blob_path=blob,
             expiration_minutes=60,
+            download_filename=filename,
         )
 
-        # ✅ UI contract
+        # UI contract
         data["download_url"] = signed_url
 
     return data
