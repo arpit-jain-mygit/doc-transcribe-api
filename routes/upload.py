@@ -39,6 +39,14 @@ def make_output_filename(uploaded_name: str) -> str:
     return f"{stem}.txt"
 
 
+def get_upload_size_bytes(file_obj) -> int:
+    pos = file_obj.tell()
+    file_obj.seek(0, os.SEEK_END)
+    size = file_obj.tell()
+    file_obj.seek(pos, os.SEEK_SET)
+    return int(size)
+
+
 @router.post("/upload")
 async def upload(
     file: UploadFile = File(...),
@@ -52,6 +60,8 @@ async def upload(
     email = user["email"].lower()
 
     log(f"User={email} Job={job_id}")
+
+    input_size_bytes = get_upload_size_bytes(file.file)
 
     gcs = upload_file(
         file_obj=file.file,
@@ -71,6 +81,7 @@ async def upload(
             "job_type": type,
             "source": source,
             "input_filename": file.filename,
+            "input_size_bytes": input_size_bytes,
             "output_filename": output_filename,
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
@@ -86,6 +97,7 @@ async def upload(
         "input_gcs_uri": gcs["gcs_uri"],
         "filename": file.filename,
         "output_filename": output_filename,
+        "input_size_bytes": input_size_bytes,
     }
 
     r.rpush(QUEUE_NAME, json.dumps(payload))
