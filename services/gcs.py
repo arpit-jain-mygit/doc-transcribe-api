@@ -78,6 +78,7 @@ def generate_signed_url(
     blob_path: str,
     expiration_minutes: int = 60,
     download_filename: str | None = None,
+    response_type: str | None = "text/plain; charset=utf-8",
 ) -> str:
     client = _get_client()
     bucket = client.bucket(bucket_name)
@@ -92,4 +93,5 @@ def generate_signed_url(
             if download_filename
             else None
         ),
+        response_type=response_type,
     )
