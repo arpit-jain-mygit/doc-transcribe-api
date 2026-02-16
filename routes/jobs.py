@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from services.auth import verify_google_token
 from services.gcs import generate_signed_url
+from utils.metrics import incr
 from utils.request_id import get_request_id
 from utils.stage_logging import log_stage
 from schemas.job_contract import (
@@ -187,15 +188,18 @@ def cancel_job(job_id: str, user=Depends(verify_google_token)):
     data = r.hgetall(key)
 
     if not data:
+        incr("api_jobs_cancel_failed_total", reason="not_found")
         log_stage(job_id=job_id, stage="JOB_CANCEL", event="FAILED", user=email, error="Job not found")
         raise HTTPException(status_code=404, detail="Job not found")
 
     if data.get("user") != email:
+        incr("api_jobs_cancel_failed_total", reason="forbidden")
         log_stage(job_id=job_id, stage="JOB_CANCEL", event="FAILED", user=email, error="Forbidden")
         raise HTTPException(status_code=403, detail="Forbidden")
 
     status = (data.get("status") or "").upper()
     if status in TERMINAL_STATUSES:
+        incr("api_jobs_cancel_noop_total", status=status)
         log_stage(
             job_id=job_id,
             stage="JOB_CANCEL",
@@ -219,6 +223,7 @@ def cancel_job(job_id: str, user=Depends(verify_google_token)):
             "updated_at": datetime.utcnow().isoformat(),
         },
     )
+    incr("api_jobs_cancel_requested_total", prior_status=status or "UNKNOWN")
 
     log_stage(job_id=job_id, stage="JOB_CANCEL", event="COMPLETED", user=email, status=JOB_STATUS_CANCELLED)
     return {

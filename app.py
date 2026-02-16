@@ -1,6 +1,7 @@
 # app.py
 import os
 import logging
+import time
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -8,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from utils.json_logging import configure_json_logging
+from utils.metrics import incr, observe_ms
 
 # Load env before importing route modules that read os.getenv at import time.
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -40,11 +42,20 @@ app = FastAPI(title="Doc Transcribe API")
 async def request_id_middleware(request: Request, call_next):
     request_id = normalize_request_id(request.headers.get(REQUEST_ID_HEADER))
     set_request_id(request_id)
+    started = time.perf_counter()
+    status_code = 500
     try:
         response = await call_next(request)
+        status_code = int(getattr(response, "status_code", 500))
         response.headers[REQUEST_ID_HEADER] = request_id
         return response
     finally:
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        method = request.method.upper()
+        path = request.url.path
+        status_class = f"{status_code // 100}xx"
+        incr("api_http_requests_total", method=method, path=path, status_class=status_class, status_code=status_code)
+        observe_ms("api_http_request_latency_ms", duration_ms, method=method, path=path, status_class=status_class)
         set_request_id(None)
 
 

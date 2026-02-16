@@ -12,6 +12,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 
 from services.gcs import upload_file
 from services.auth import verify_google_token
+from utils.metrics import incr
 from utils.request_id import get_request_id
 from utils.stage_logging import log_stage
 from schemas.job_contract import CONTRACT_VERSION, JOB_TYPES, JOB_STATUS_QUEUED
@@ -50,6 +51,7 @@ async def upload(
     user=Depends(verify_google_token),
 ):
     if job_type not in JOB_TYPES:
+        incr("api_jobs_submit_failed_total", reason="invalid_job_type", job_type=job_type or "")
         logger.warning("upload_validation_failed invalid_job_type type=%s", job_type)
         raise HTTPException(status_code=400, detail="Invalid job type")
 
@@ -203,6 +205,7 @@ async def upload(
         )
         raise HTTPException(status_code=503, detail="Queue push failed") from exc
 
+    incr("api_jobs_submitted_total", job_type=job_type, source=source)
     log_stage(
         job_id=job_id,
         stage="UPLOAD_REQUEST",
