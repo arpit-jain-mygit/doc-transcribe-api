@@ -16,6 +16,7 @@ from utils.metrics import incr
 from utils.request_id import get_request_id
 from utils.stage_logging import log_stage
 from schemas.job_contract import CONTRACT_VERSION, JOB_TYPES, JOB_STATUS_QUEUED
+from utils.status_machine import transition_hset
 
 router = APIRouter()
 logger = logging.getLogger("api.upload")
@@ -95,6 +96,8 @@ async def upload(
             job_type=job_type,
             input_gcs_uri=gcs.get("gcs_uri"),
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         log_stage(
             job_id=job_id,
@@ -119,8 +122,9 @@ async def upload(
     )
     try:
         now_ts = datetime.utcnow().isoformat()
-        r.hset(
-            f"job_status:{job_id}",
+        ok, current_status, _ = transition_hset(
+            r,
+            key=f"job_status:{job_id}",
             mapping={
                 "contract_version": CONTRACT_VERSION,
                 "status": JOB_STATUS_QUEUED,
@@ -136,7 +140,11 @@ async def upload(
                 "updated_at": now_ts,
                 "request_id": request_id or "",
             },
+            context="UPLOAD_INIT",
+            request_id=request_id or "",
         )
+        if not ok:
+            raise HTTPException(status_code=409, detail=f"Invalid status transition to QUEUED from {current_status or 'NONE'}")
         r.lpush(f"user_jobs:{email}", job_id)
         log_stage(
             job_id=job_id,

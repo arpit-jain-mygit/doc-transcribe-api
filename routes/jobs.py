@@ -14,6 +14,7 @@ from schemas.job_contract import (
     TERMINAL_STATUSES,
     JOB_STATUS_CANCELLED,
 )
+from utils.status_machine import transition_hset
 
 router = APIRouter()
 
@@ -213,16 +214,20 @@ def cancel_job(job_id: str, user=Depends(verify_google_token)):
             "status": status,
             "message": "Job already finished",
         }
-
-    r.hset(
-        key,
+    ok, current_status, _ = transition_hset(
+        r,
+        key=key,
         mapping={
             "cancel_requested": "1",
             "status": JOB_STATUS_CANCELLED,
             "stage": "Cancelled by user",
             "updated_at": datetime.utcnow().isoformat(),
         },
+        context="JOB_CANCEL",
+        request_id=str(data.get("request_id") or ""),
     )
+    if not ok:
+        raise HTTPException(status_code=409, detail=f"Invalid status transition to CANCELLED from {current_status or 'NONE'}")
     incr("api_jobs_cancel_requested_total", prior_status=status or "UNKNOWN")
 
     log_stage(job_id=job_id, stage="JOB_CANCEL", event="COMPLETED", user=email, status=JOB_STATUS_CANCELLED)
