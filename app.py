@@ -1,5 +1,6 @@
 # app.py
 import os
+import logging
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -7,6 +8,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Load env before importing route modules that read os.getenv at import time.
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+
+def configure_logging() -> None:
+    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+
+
+configure_logging()
 
 from routes.upload import router as upload_router
 from routes.status import router as status_router

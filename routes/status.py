@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 
 from services.auth import verify_google_token
 from services.gcs import generate_signed_url
+from utils.stage_logging import log_stage
 
 router = APIRouter()
 
@@ -17,13 +18,18 @@ def get_status(
     job_id: str,
     user=Depends(verify_google_token),
 ):
+    email = user["email"].lower()
+    log_stage(job_id=job_id, stage="STATUS_READ", event="STARTED", user=email)
+
     key = f"job_status:{job_id}"
     data = r.hgetall(key)
 
     if not data:
+        log_stage(job_id=job_id, stage="STATUS_READ", event="FAILED", user=email, error="Job not found")
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if data.get("user") != user["email"].lower():
+    if data.get("user") != email:
+        log_stage(job_id=job_id, stage="STATUS_READ", event="FAILED", user=email, error="Forbidden")
         raise HTTPException(status_code=403, detail="Forbidden")
 
     output_path = data.get("output_path")
@@ -41,5 +47,17 @@ def get_status(
         )
 
         data["download_url"] = signed_url
+
+    log_stage(
+        job_id=job_id,
+        stage="STATUS_READ",
+        event="COMPLETED",
+        user=email,
+        job_type=data.get("job_type"),
+        source=data.get("source"),
+        status=data.get("status"),
+        worker_stage=data.get("stage"),
+        progress=data.get("progress"),
+    )
 
     return data

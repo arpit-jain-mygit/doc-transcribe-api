@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from services.auth import verify_google_token
 from services.gcs import generate_signed_url
+from utils.stage_logging import log_stage
 
 router = APIRouter()
 
@@ -23,6 +24,18 @@ def list_jobs(
     include_counts: bool = Query(default=False, description="Include counts_by_status in response"),
 ):
     email = user["email"].lower()
+    log_stage(
+        job_id="jobs-list",
+        stage="JOBS_LIST",
+        event="STARTED",
+        user=email,
+        requested_status=status,
+        requested_job_type=job_type,
+        limit=limit,
+        offset=offset,
+        include_counts=include_counts,
+    )
+
     job_ids = r.lrange(f"user_jobs:{email}", 0, -1)
 
     def enrich(job_id: str, data: dict) -> dict:
@@ -53,6 +66,15 @@ def list_jobs(
             if not data:
                 continue
             jobs.append(enrich(job_id, data))
+
+        log_stage(
+            job_id="jobs-list",
+            stage="JOBS_LIST",
+            event="COMPLETED",
+            user=email,
+            returned_count=len(jobs),
+            paginated=False,
+        )
         return jobs
 
     status_norm = status.strip().upper() if status else None
@@ -137,22 +159,45 @@ def list_jobs(
         response["counts_by_status"] = counts_by_status
         response["counts_by_type"] = counts_by_type
 
+    log_stage(
+        job_id="jobs-list",
+        stage="JOBS_LIST",
+        event="COMPLETED",
+        user=email,
+        returned_count=len(items),
+        paginated=True,
+        has_more=has_more,
+        next_offset=response.get("next_offset"),
+    )
     return response
 
 
 @router.post("/jobs/{job_id}/cancel")
 def cancel_job(job_id: str, user=Depends(verify_google_token)):
+    email = user["email"].lower()
+    log_stage(job_id=job_id, stage="JOB_CANCEL", event="STARTED", user=email)
+
     key = f"job_status:{job_id}"
     data = r.hgetall(key)
 
     if not data:
+        log_stage(job_id=job_id, stage="JOB_CANCEL", event="FAILED", user=email, error="Job not found")
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if data.get("user") != user["email"].lower():
+    if data.get("user") != email:
+        log_stage(job_id=job_id, stage="JOB_CANCEL", event="FAILED", user=email, error="Forbidden")
         raise HTTPException(status_code=403, detail="Forbidden")
 
     status = (data.get("status") or "").upper()
     if status in {"COMPLETED", "FAILED", "CANCELLED"}:
+        log_stage(
+            job_id=job_id,
+            stage="JOB_CANCEL",
+            event="COMPLETED",
+            user=email,
+            status=status,
+            message="already_finished",
+        )
         return {
             "job_id": job_id,
             "status": status,
@@ -169,6 +214,7 @@ def cancel_job(job_id: str, user=Depends(verify_google_token)):
         },
     )
 
+    log_stage(job_id=job_id, stage="JOB_CANCEL", event="COMPLETED", user=email, status="CANCELLED")
     return {
         "job_id": job_id,
         "status": "CANCELLED",

@@ -12,6 +12,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 
 from services.gcs import upload_file
 from services.auth import verify_google_token
+from utils.stage_logging import log_stage
 
 router = APIRouter()
 logger = logging.getLogger("api.upload")
@@ -20,11 +21,6 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 QUEUE_NAME = os.getenv("QUEUE_NAME", "doc_jobs")
-
-
-def log(msg: str):
-    print(f"[UPLOAD {datetime.utcnow().isoformat()}] {msg}", flush=True)
-    logger.info(msg)
 
 
 def make_output_filename(uploaded_name: str) -> str:
@@ -48,32 +44,74 @@ def get_upload_size_bytes(file_obj) -> int:
 @router.post("/upload")
 async def upload(
     file: UploadFile = File(...),
-    type: str = Form(...),
+    job_type: str = Form(..., alias="type"),
     user=Depends(verify_google_token),
 ):
-    if type not in ("OCR", "TRANSCRIPTION"):
+    if job_type not in ("OCR", "TRANSCRIPTION"):
+        logger.warning("upload_validation_failed invalid_job_type type=%s", job_type)
         raise HTTPException(status_code=400, detail="Invalid job type")
 
     job_id = uuid.uuid4().hex
     email = user["email"].lower()
 
-    log(f"User={email} Job={job_id}")
+    log_stage(
+        job_id=job_id,
+        stage="UPLOAD_REQUEST",
+        event="STARTED",
+        user=email,
+        job_type=job_type,
+        filename=file.filename,
+        queue=QUEUE_NAME,
+    )
 
     input_size_bytes = get_upload_size_bytes(file.file)
 
+    log_stage(
+        job_id=job_id,
+        stage="INPUT_STORED_IN_GCS",
+        event="STARTED",
+        user=email,
+        job_type=job_type,
+        filename=file.filename,
+        input_size_bytes=input_size_bytes,
+    )
     try:
         gcs = upload_file(
             file_obj=file.file,
             destination_path=f"jobs/{job_id}/input/{file.filename}",
         )
+        log_stage(
+            job_id=job_id,
+            stage="INPUT_STORED_IN_GCS",
+            event="COMPLETED",
+            user=email,
+            job_type=job_type,
+            input_gcs_uri=gcs.get("gcs_uri"),
+        )
     except Exception as exc:
-        log(f"Job={job_id} upload_file failed: {exc}")
+        log_stage(
+            job_id=job_id,
+            stage="INPUT_STORED_IN_GCS",
+            event="FAILED",
+            user=email,
+            job_type=job_type,
+            error=f"{exc.__class__.__name__}: {exc}",
+        )
         raise HTTPException(status_code=503, detail="Failed to store upload input") from exc
 
     output_filename = make_output_filename(file.filename)
-    source = "ocr" if type == "OCR" else "file"
+    source = "ocr" if job_type == "OCR" else "file"
 
+    log_stage(
+        job_id=job_id,
+        stage="REDIS_JOB_METADATA",
+        event="STARTED",
+        user=email,
+        job_type=job_type,
+        source=source,
+    )
     try:
+        now_ts = datetime.utcnow().isoformat()
         r.hset(
             f"job_status:{job_id}",
             mapping={
@@ -81,23 +119,39 @@ async def upload(
                 "stage": "Queued",
                 "progress": 0,
                 "user": email,
-                "job_type": type,
+                "job_type": job_type,
                 "source": source,
                 "input_filename": file.filename,
                 "input_size_bytes": input_size_bytes,
                 "output_filename": output_filename,
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
+                "created_at": now_ts,
+                "updated_at": now_ts,
             },
         )
         r.lpush(f"user_jobs:{email}", job_id)
+        log_stage(
+            job_id=job_id,
+            stage="REDIS_JOB_METADATA",
+            event="COMPLETED",
+            user=email,
+            job_type=job_type,
+            source=source,
+        )
     except Exception as exc:
-        log(f"Job={job_id} Redis status write failed: {exc}")
+        log_stage(
+            job_id=job_id,
+            stage="REDIS_JOB_METADATA",
+            event="FAILED",
+            user=email,
+            job_type=job_type,
+            source=source,
+            error=f"{exc.__class__.__name__}: {exc}",
+        )
         raise HTTPException(status_code=503, detail="Queue metadata write failed") from exc
 
     payload = {
         "job_id": job_id,
-        "job_type": type,
+        "job_type": job_type,
         "source": source,
         "input_gcs_uri": gcs["gcs_uri"],
         "filename": file.filename,
@@ -105,10 +159,48 @@ async def upload(
         "input_size_bytes": input_size_bytes,
     }
 
+    log_stage(
+        job_id=job_id,
+        stage="REDIS_QUEUE_ENQUEUE",
+        event="STARTED",
+        user=email,
+        job_type=job_type,
+        source=source,
+        queue=QUEUE_NAME,
+    )
     try:
         r.rpush(QUEUE_NAME, json.dumps(payload))
+        queue_depth = r.llen(QUEUE_NAME)
+        log_stage(
+            job_id=job_id,
+            stage="REDIS_QUEUE_ENQUEUE",
+            event="COMPLETED",
+            user=email,
+            job_type=job_type,
+            source=source,
+            queue=QUEUE_NAME,
+            queue_depth=queue_depth,
+        )
     except Exception as exc:
-        log(f"Job={job_id} queue push failed: {exc}")
+        log_stage(
+            job_id=job_id,
+            stage="REDIS_QUEUE_ENQUEUE",
+            event="FAILED",
+            user=email,
+            job_type=job_type,
+            source=source,
+            queue=QUEUE_NAME,
+            error=f"{exc.__class__.__name__}: {exc}",
+        )
         raise HTTPException(status_code=503, detail="Queue push failed") from exc
+
+    log_stage(
+        job_id=job_id,
+        stage="UPLOAD_REQUEST",
+        event="COMPLETED",
+        user=email,
+        job_type=job_type,
+        source=source,
+    )
 
     return {"job_id": job_id}
