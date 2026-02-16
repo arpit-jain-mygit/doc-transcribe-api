@@ -12,6 +12,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 
 from services.gcs import upload_file
 from services.auth import verify_google_token
+from utils.request_id import get_request_id
 from utils.stage_logging import log_stage
 from schemas.job_contract import CONTRACT_VERSION, JOB_TYPES, JOB_STATUS_QUEUED
 
@@ -54,6 +55,7 @@ async def upload(
 
     job_id = uuid.uuid4().hex
     email = user["email"].lower()
+    request_id = get_request_id()
 
     log_stage(
         job_id=job_id,
@@ -64,6 +66,7 @@ async def upload(
         filename=file.filename,
         queue=QUEUE_NAME,
         contract_version=CONTRACT_VERSION,
+        request_id=request_id,
     )
 
     input_size_bytes = get_upload_size_bytes(file.file)
@@ -129,6 +132,7 @@ async def upload(
                 "output_filename": output_filename,
                 "created_at": now_ts,
                 "updated_at": now_ts,
+                "request_id": request_id or "",
             },
         )
         r.lpush(f"user_jobs:{email}", job_id)
@@ -161,6 +165,7 @@ async def upload(
         "filename": file.filename,
         "output_filename": output_filename,
         "input_size_bytes": input_size_bytes,
+        "request_id": request_id or "",
     }
 
     log_stage(
@@ -206,6 +211,7 @@ async def upload(
         job_type=job_type,
         source=source,
         contract_version=CONTRACT_VERSION,
+        request_id=request_id,
     )
 
-    return {"job_id": job_id}
+    return {"job_id": job_id, "request_id": request_id}

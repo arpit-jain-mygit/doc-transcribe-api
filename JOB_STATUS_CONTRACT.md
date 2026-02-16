@@ -1,7 +1,7 @@
 # Canonical Job/Status Contract (Source of Truth)
 
 Contract version:
-- `2026-02-16-prs-002`
+- `2026-02-16-prs-005`
 
 Machine-readable endpoint:
 - `GET /contract/job-status`
@@ -28,6 +28,7 @@ Machine-readable endpoint:
 
 Required lifecycle fields:
 - `contract_version` (string)
+- `request_id` (string; correlation id across UI/API/Worker logs)
 - `job_id` (string)
 - `job_type` (enum)
 - `status` (enum)

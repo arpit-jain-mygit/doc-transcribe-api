@@ -3,6 +3,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from utils.request_id import get_request_id
+
 logger = logging.getLogger("api.stage")
 
 
@@ -29,6 +31,7 @@ def log_stage(
     error: str | None = None,
     **extra: Any,
 ) -> None:
+    request_id = str(extra.pop("request_id", "") or get_request_id() or "").strip()
     payload = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "job_id": job_id,
@@ -44,6 +47,8 @@ def log_stage(
         payload["source"] = source
     if error:
         payload["error"] = error
+    if request_id:
+        payload["request_id"] = request_id
 
     for key, value in extra.items():
         norm = _norm(value)

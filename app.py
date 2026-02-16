@@ -24,6 +24,7 @@ def configure_logging() -> None:
 configure_logging()
 logger = logging.getLogger("api.error")
 from startup_env import validate_startup_env
+from utils.request_id import REQUEST_ID_HEADER, get_request_id, normalize_request_id, set_request_id
 
 validate_startup_env()
 
@@ -37,6 +38,17 @@ from routes.contract import router as contract_router
 app = FastAPI(title="Doc Transcribe API")
 
 
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = normalize_request_id(request.headers.get(REQUEST_ID_HEADER))
+    set_request_id(request_id)
+    try:
+        response = await call_next(request)
+        response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+    finally:
+        set_request_id(None)
+
 
 def _extract_error_message(detail) -> str:
     if isinstance(detail, dict):
@@ -49,18 +61,21 @@ def _extract_error_message(detail) -> str:
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     detail = exc.detail
+    request_id = get_request_id()
     body = {
         "error_code": f"HTTP_{exc.status_code}",
         "error_message": _extract_error_message(detail),
         "detail": detail,
         "path": request.url.path,
+        "request_id": request_id,
     }
     if isinstance(detail, dict) and detail.get("error_code"):
         body["error_code"] = str(detail.get("error_code"))
     logger.warning(
-        "request_failed status=%s path=%s error_code=%s error_message=%s",
+        "request_failed status=%s path=%s request_id=%s error_code=%s error_message=%s",
         exc.status_code,
         request.url.path,
+        request_id,
         body["error_code"],
         body["error_message"],
     )
@@ -70,7 +85,8 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     error_message = f"{exc.__class__.__name__}: {exc}"
-    logger.exception("request_failed_unhandled path=%s error=%s", request.url.path, error_message)
+    request_id = get_request_id()
+    logger.exception("request_failed_unhandled path=%s request_id=%s error=%s", request.url.path, request_id, error_message)
     return JSONResponse(
         status_code=500,
         content={
@@ -78,6 +94,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             "error_message": error_message,
             "detail": "Unhandled server exception",
             "path": request.url.path,
+            "request_id": request_id,
         },
     )
 
@@ -92,6 +109,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[REQUEST_ID_HEADER],
 )
 
 app.include_router(auth_router)

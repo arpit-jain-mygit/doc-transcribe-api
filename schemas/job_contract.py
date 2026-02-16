@@ -1,4 +1,4 @@
-CONTRACT_VERSION = "2026-02-16-prs-002"
+CONTRACT_VERSION = "2026-02-16-prs-005"
 
 JOB_TYPES = ("OCR", "TRANSCRIPTION")
 
@@ -30,6 +30,7 @@ TRACKED_HISTORY_STATUSES = (
 
 CANONICAL_FIELDS = (
     "contract_version",
+    "request_id",
     "job_id",
     "job_type",
     "status",

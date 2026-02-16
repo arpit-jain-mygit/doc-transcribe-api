@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from services.auth import verify_google_token
 from services.gcs import generate_signed_url
+from utils.request_id import get_request_id
 from utils.stage_logging import log_stage
 from schemas.job_contract import (
     TRACKED_HISTORY_STATUSES,
@@ -44,6 +45,10 @@ def list_jobs(
     job_ids = r.lrange(f"user_jobs:{email}", 0, -1)
 
     def enrich(job_id: str, data: dict) -> dict:
+        if not data.get("request_id"):
+            rid = get_request_id()
+            if rid:
+                data["request_id"] = rid
         output_path = data.get("output_path")
         if output_path and output_path.startswith("gs://"):
             path = output_path.replace("gs://", "")

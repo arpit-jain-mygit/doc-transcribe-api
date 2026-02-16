@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 
 from services.auth import verify_google_token
 from services.gcs import generate_signed_url
+from utils.request_id import get_request_id
 from utils.stage_logging import log_stage
 
 router = APIRouter()
@@ -46,6 +47,11 @@ def get_status(
     if data.get("user") != email:
         log_stage(job_id=job_id, stage="STATUS_READ", event="FAILED", user=email, error="Forbidden")
         raise HTTPException(status_code=403, detail="Forbidden")
+
+    if not data.get("request_id"):
+        rid = get_request_id()
+        if rid:
+            data["request_id"] = rid
 
     output_path = data.get("output_path")
 
