@@ -13,6 +13,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from services.gcs import upload_file
 from services.auth import verify_google_token
 from utils.stage_logging import log_stage
+from schemas.job_contract import CONTRACT_VERSION, JOB_TYPES, JOB_STATUS_QUEUED
 
 router = APIRouter()
 logger = logging.getLogger("api.upload")
@@ -47,7 +48,7 @@ async def upload(
     job_type: str = Form(..., alias="type"),
     user=Depends(verify_google_token),
 ):
-    if job_type not in ("OCR", "TRANSCRIPTION"):
+    if job_type not in JOB_TYPES:
         logger.warning("upload_validation_failed invalid_job_type type=%s", job_type)
         raise HTTPException(status_code=400, detail="Invalid job type")
 
@@ -62,6 +63,7 @@ async def upload(
         job_type=job_type,
         filename=file.filename,
         queue=QUEUE_NAME,
+        contract_version=CONTRACT_VERSION,
     )
 
     input_size_bytes = get_upload_size_bytes(file.file)
@@ -115,7 +117,8 @@ async def upload(
         r.hset(
             f"job_status:{job_id}",
             mapping={
-                "status": "QUEUED",
+                "contract_version": CONTRACT_VERSION,
+                "status": JOB_STATUS_QUEUED,
                 "stage": "Queued",
                 "progress": 0,
                 "user": email,
@@ -150,6 +153,7 @@ async def upload(
         raise HTTPException(status_code=503, detail="Queue metadata write failed") from exc
 
     payload = {
+        "contract_version": CONTRACT_VERSION,
         "job_id": job_id,
         "job_type": job_type,
         "source": source,
@@ -201,6 +205,7 @@ async def upload(
         user=email,
         job_type=job_type,
         source=source,
+        contract_version=CONTRACT_VERSION,
     )
 
     return {"job_id": job_id}

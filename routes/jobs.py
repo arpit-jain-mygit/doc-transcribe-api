@@ -7,6 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from services.auth import verify_google_token
 from services.gcs import generate_signed_url
 from utils.stage_logging import log_stage
+from schemas.job_contract import (
+    TRACKED_HISTORY_STATUSES,
+    TERMINAL_STATUSES,
+    JOB_STATUS_CANCELLED,
+)
 
 router = APIRouter()
 
@@ -79,12 +84,9 @@ def list_jobs(
 
     status_norm = status.strip().upper() if status else None
     job_type_norm = job_type.strip().upper() if job_type else None
-    counts_by_status = {"COMPLETED": 0, "FAILED": 0, "CANCELLED": 0}
+    counts_by_status = {k: 0 for k in TRACKED_HISTORY_STATUSES}
     counts_by_type = {"TRANSCRIPTION": 0, "OCR": 0}
 
-    # Fast path for paginated load-more:
-    # 1) Read only lightweight fields for all candidate jobs (single pipeline)
-    # 2) Fetch full hashes only for page items (small pipeline)
     selected_job_ids: list[str] = []
     matched_seen = 0
     matched_total = 0
@@ -125,7 +127,6 @@ def list_jobs(
             matched_seen += 1
             continue
 
-        # We found at least one more item after this page.
         if not include_counts:
             break
 
@@ -189,7 +190,7 @@ def cancel_job(job_id: str, user=Depends(verify_google_token)):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     status = (data.get("status") or "").upper()
-    if status in {"COMPLETED", "FAILED", "CANCELLED"}:
+    if status in TERMINAL_STATUSES:
         log_stage(
             job_id=job_id,
             stage="JOB_CANCEL",
@@ -208,15 +209,15 @@ def cancel_job(job_id: str, user=Depends(verify_google_token)):
         key,
         mapping={
             "cancel_requested": "1",
-            "status": "CANCELLED",
+            "status": JOB_STATUS_CANCELLED,
             "stage": "Cancelled by user",
             "updated_at": datetime.utcnow().isoformat(),
         },
     )
 
-    log_stage(job_id=job_id, stage="JOB_CANCEL", event="COMPLETED", user=email, status="CANCELLED")
+    log_stage(job_id=job_id, stage="JOB_CANCEL", event="COMPLETED", user=email, status=JOB_STATUS_CANCELLED)
     return {
         "job_id": job_id,
-        "status": "CANCELLED",
+        "status": JOB_STATUS_CANCELLED,
         "message": "Cancellation requested",
     }
