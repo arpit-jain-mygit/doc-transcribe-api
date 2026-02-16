@@ -13,6 +13,21 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
+def normalize_failure_fields(data: dict) -> None:
+    status = (data.get("status") or "").upper()
+    if status != "FAILED":
+        return
+
+    error_code = str(data.get("error_code") or "").strip().upper()
+    if not error_code:
+        data["error_code"] = "PROCESSING_FAILED"
+
+    error_message = str(data.get("error_message") or "").strip()
+    if not error_message:
+        fallback = str(data.get("error") or data.get("stage") or "Processing failed. Please try again.").strip()
+        data["error_message"] = fallback
+
+
 @router.get("/status/{job_id}")
 def get_status(
     job_id: str,
@@ -48,6 +63,8 @@ def get_status(
 
         data["download_url"] = signed_url
 
+    normalize_failure_fields(data)
+
     log_stage(
         job_id=job_id,
         stage="STATUS_READ",
@@ -58,6 +75,7 @@ def get_status(
         status=data.get("status"),
         worker_stage=data.get("stage"),
         progress=data.get("progress"),
+        error_code=data.get("error_code"),
     )
 
     return data
