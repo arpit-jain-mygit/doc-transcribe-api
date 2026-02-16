@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from utils.json_logging import configure_json_logging
 
 # Load env before importing route modules that read os.getenv at import time.
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -15,10 +16,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 def configure_logging() -> None:
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    )
+    configure_json_logging(service="doc-transcribe-api", level=level)
 
 
 configure_logging()

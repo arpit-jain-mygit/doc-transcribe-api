@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -55,8 +54,7 @@ def log_stage(
         if norm is not None:
             payload[key] = norm
 
-    msg = json.dumps(payload, ensure_ascii=False)
     if error or payload["event"] == "FAILED":
-        logger.error("stage_event %s", msg)
+        logger.error("stage_event", extra={"payload": payload})
     else:
-        logger.info("stage_event %s", msg)
+        logger.info("stage_event", extra={"payload": payload})
