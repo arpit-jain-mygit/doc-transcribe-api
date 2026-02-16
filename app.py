@@ -23,6 +23,9 @@ def configure_logging() -> None:
 
 configure_logging()
 logger = logging.getLogger("api.error")
+from startup_env import validate_startup_env
+
+validate_startup_env()
 
 from routes.upload import router as upload_router
 from routes.status import router as status_router
