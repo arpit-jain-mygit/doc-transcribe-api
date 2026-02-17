@@ -39,6 +39,18 @@ from routes.contract import router as contract_router
 app = FastAPI(title="Doc Transcribe API")
 
 
+def _parse_csv_env(name: str) -> list[str]:
+    raw = os.getenv(name, "")
+    values = [x.strip() for x in raw.split(",") if x.strip()]
+    seen = set()
+    ordered = []
+    for item in values:
+        if item not in seen:
+            seen.add(item)
+            ordered.append(item)
+    return ordered
+
+
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     request_id = normalize_request_id(request.headers.get(REQUEST_ID_HEADER))
@@ -159,13 +171,18 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content=body)
 
 
+CORS_ALLOW_ORIGINS = _parse_csv_env("CORS_ALLOW_ORIGINS")
+CORS_ALLOW_ORIGIN_REGEX = (os.getenv("CORS_ALLOW_ORIGIN_REGEX") or "").strip() or None
+logger.info(
+    "cors_configured allow_origins=%s allow_origin_regex=%s",
+    CORS_ALLOW_ORIGINS,
+    CORS_ALLOW_ORIGIN_REGEX or "",
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:4200",
-        "http://127.0.0.1:4200",
-    ],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=CORS_ALLOW_ORIGINS,
+    allow_origin_regex=CORS_ALLOW_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
