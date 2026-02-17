@@ -8,7 +8,7 @@ _REQUEST_ID_CTX: ContextVar[str | None] = ContextVar("request_id", default=None)
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: normalizes data so users see consistent OCR/transcription results.
 def normalize_request_id(raw: str | None) -> str:
     value = (raw or "").strip()
     if value and _REQUEST_ID_RE.match(value):
@@ -16,11 +16,11 @@ def normalize_request_id(raw: str | None) -> str:
     return f"req-{uuid.uuid4().hex}"
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: updates user-visible OCR/transcription state accurately.
 def set_request_id(value: str | None) -> None:
     _REQUEST_ID_CTX.set(value)
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: loads latest OCR/transcription data so users see current status.
 def get_request_id() -> str | None:
     return _REQUEST_ID_CTX.get()

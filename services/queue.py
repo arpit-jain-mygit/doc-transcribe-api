@@ -18,7 +18,7 @@ r = redis.Redis.from_url(
 QUEUE_NAME = os.getenv("QUEUE_NAME", "doc_jobs")
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: routes work so user OCR/transcription jobs are processed correctly.
 def enqueue_job(job_id: str, job: dict):
     payload = job.copy()
     payload["job_id"] = job_id

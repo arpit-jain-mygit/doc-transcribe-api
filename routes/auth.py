@@ -7,7 +7,7 @@ router = APIRouter()
 
 
 @router.post("/auth/google")
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: protects user access before OCR/transcription actions are allowed.
 def google_auth(payload: dict):
     """
     Optional endpoint.

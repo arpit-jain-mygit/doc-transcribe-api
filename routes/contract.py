@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.get("/contract/job-status")
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: keeps job/status fields consistent across OCR/transcription views.
 def job_status_contract():
     return {
         "contract_version": CONTRACT_VERSION,

@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 @router.post("/upload")
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: submits user files safely for OCR/transcription processing.
 async def upload(
     file: UploadFile = File(...),
     job_type: str = Form(..., alias="type"),

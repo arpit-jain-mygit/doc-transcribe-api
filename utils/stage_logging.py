@@ -8,7 +8,7 @@ from utils.request_id import get_request_id
 logger = logging.getLogger("api.stage")
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports _norm so the OCR/transcription journey stays clear and reliable.
 def _norm(value: Any) -> Any:
     if isinstance(value, bool):
         return value
@@ -21,7 +21,7 @@ def _norm(value: Any) -> Any:
     return str(value)
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports log_stage so the OCR/transcription journey stays clear and reliable.
 def log_stage(
     *,
     job_id: str,

@@ -17,7 +17,7 @@ from utils.metrics import incr, observe_ms
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: prepares a stable OCR/transcription experience before user actions.
 def configure_logging() -> None:
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
@@ -42,7 +42,7 @@ from routes.contract import router as contract_router
 app = FastAPI(title="Doc Transcribe API")
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: normalizes data so users see consistent OCR/transcription results.
 def _parse_csv_env(name: str) -> list[str]:
     raw = os.getenv(name, "")
     values = [x.strip() for x in raw.split(",") if x.strip()]
@@ -56,7 +56,7 @@ def _parse_csv_env(name: str) -> list[str]:
 
 
 @app.middleware("http")
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports request_id_middleware so the OCR/transcription journey stays clear and reliable.
 async def request_id_middleware(request: Request, call_next):
     request_id = normalize_request_id(request.headers.get(REQUEST_ID_HEADER))
     set_request_id(request_id)
@@ -77,7 +77,7 @@ async def request_id_middleware(request: Request, call_next):
         set_request_id(None)
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports _extract_error_message so the OCR/transcription journey stays clear and reliable.
 def _extract_error_message(detail) -> str:
     if isinstance(detail, dict):
         return str(detail.get("error_message") or detail.get("message") or detail.get("detail") or detail)
@@ -86,7 +86,7 @@ def _extract_error_message(detail) -> str:
     return str(detail)
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports _to_error_code so the OCR/transcription journey stays clear and reliable.
 def _to_error_code(status_code: int, detail) -> str:
     if isinstance(detail, dict) and detail.get("error_code"):
         return str(detail.get("error_code")).strip().upper()
@@ -113,7 +113,7 @@ def _to_error_code(status_code: int, detail) -> str:
     return f"HTTP_{status_code}"
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports _error_body so the OCR/transcription journey stays clear and reliable.
 def _error_body(*, request: Request, status_code: int, detail, error_message: str | None = None) -> dict:
     request_id = get_request_id() or normalize_request_id(request.headers.get(REQUEST_ID_HEADER))
     body = {
@@ -127,7 +127,7 @@ def _error_body(*, request: Request, status_code: int, detail, error_message: st
 
 
 @app.exception_handler(RequestValidationError)
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports validation_exception_handler so the OCR/transcription journey stays clear and reliable.
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     detail = exc.errors()
     body = _error_body(
@@ -147,7 +147,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 @app.exception_handler(StarletteHTTPException)
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports http_exception_handler so the OCR/transcription journey stays clear and reliable.
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     body = _error_body(request=request, status_code=exc.status_code, detail=exc.detail)
     logger.warning(
@@ -162,7 +162,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 
 @app.exception_handler(Exception)
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports unhandled_exception_handler so the OCR/transcription journey stays clear and reliable.
 async def unhandled_exception_handler(request: Request, exc: Exception):
     request_id = get_request_id() or normalize_request_id(request.headers.get(REQUEST_ID_HEADER))
     logger.exception(

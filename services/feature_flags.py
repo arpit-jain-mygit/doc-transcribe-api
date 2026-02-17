@@ -2,7 +2,7 @@
 import os
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports _flag so the OCR/transcription journey stays clear and reliable.
 def _flag(name: str, default: bool = False) -> bool:
     raw = str(os.getenv(name, "1" if default else "0")).strip().lower()
     return raw in {"1", "true", "yes", "on"}

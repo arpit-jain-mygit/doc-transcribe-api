@@ -2,7 +2,7 @@
 from fastapi import Header, HTTPException
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports verify_token so the OCR/transcription journey stays clear and reliable.
 async def verify_token(authorization: str = Header(...)):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid auth header")

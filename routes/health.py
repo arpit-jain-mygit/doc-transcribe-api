@@ -6,12 +6,12 @@ router = APIRouter()
 
 
 @router.get("/health")
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports health so the OCR/transcription journey stays clear and reliable.
 def health():
     return {"status": "ok"}
 
 
 @router.get("/metrics")
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports metrics so the OCR/transcription journey stays clear and reliable.
 def metrics():
     return {"status": "ok", "metrics": snapshot()}

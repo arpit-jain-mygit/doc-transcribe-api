@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.get("/ready")
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports ready so the OCR/transcription journey stays clear and reliable.
 def ready():
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     bucket_name = os.getenv("GCS_BUCKET_NAME", "")

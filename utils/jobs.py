@@ -2,6 +2,6 @@
 import uuid
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: builds the required payload/state for user OCR/transcription flow.
 def create_job_id() -> str:
     return uuid.uuid4().hex

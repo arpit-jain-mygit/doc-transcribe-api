@@ -15,7 +15,7 @@ MAX_TRANSCRIPTION_DURATION_SEC = int(os.getenv("MAX_TRANSCRIPTION_DURATION_SEC",
 _TERMINAL = {"COMPLETED", "FAILED", "CANCELLED"}
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: submits user files safely for OCR/transcription processing.
 def enforce_upload_quotas(*, r, email: str, request_id: str, job_type: str) -> None:
     if DAILY_JOB_LIMIT_PER_USER > 0:
         day_key = datetime.utcnow().strftime("%Y%m%d")
@@ -55,7 +55,7 @@ def enforce_upload_quotas(*, r, email: str, request_id: str, job_type: str) -> N
     )
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: supports register_daily_job_usage so the OCR/transcription journey stays clear and reliable.
 def register_daily_job_usage(*, r, email: str) -> None:
     if DAILY_JOB_LIMIT_PER_USER <= 0:
         return
@@ -66,7 +66,7 @@ def register_daily_job_usage(*, r, email: str) -> None:
         r.expire(counter_key, 172800)
 
 
-# User value: This step keeps the user OCR/transcription flow accurate and dependable.
+# User value: shows clear processing timing so users can set expectations.
 def enforce_pages_and_duration_limits(*, job_type: str, total_pages: int | None, media_duration_sec: float | None) -> None:
     if job_type == "OCR" and MAX_OCR_PAGES > 0 and total_pages is not None and total_pages > MAX_OCR_PAGES:
         raise HTTPException(
