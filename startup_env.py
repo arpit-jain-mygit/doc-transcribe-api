@@ -35,6 +35,21 @@ def _validate_cors_allow_origins(value: str | None, errors: List[str]) -> None:
             errors.append(f"CORS origin must start with http:// or https://: {origin}")
 
 
+def _validate_positive_int_env(name: str, default: int, errors: List[str]) -> None:
+    raw = os.getenv(name)
+    if _is_blank(raw):
+        if default <= 0:
+            errors.append(f"{name} default must be > 0")
+        return
+    try:
+        value = int(str(raw))
+    except ValueError:
+        errors.append(f"{name} must be an integer")
+        return
+    if value <= 0:
+        errors.append(f"{name} must be > 0")
+
+
 def validate_startup_env() -> None:
     errors: List[str] = []
     warnings: List[str] = []
@@ -50,6 +65,8 @@ def validate_startup_env() -> None:
 
     _validate_redis_url(os.getenv("REDIS_URL"), "REDIS_URL", errors)
     _validate_cors_allow_origins(os.getenv("CORS_ALLOW_ORIGINS"), errors)
+    _validate_positive_int_env("MAX_OCR_FILE_SIZE_MB", 25, errors)
+    _validate_positive_int_env("MAX_TRANSCRIPTION_FILE_SIZE_MB", 100, errors)
 
     if _is_blank(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")):
         warnings.append(
@@ -66,5 +83,13 @@ def validate_startup_env() -> None:
 
     logger.info(
         "startup_env_validated keys=%s",
-        ["GOOGLE_CLIENT_ID", "REDIS_URL", "QUEUE_NAME", "GCS_BUCKET_NAME", "CORS_ALLOW_ORIGINS"],
+        [
+            "GOOGLE_CLIENT_ID",
+            "REDIS_URL",
+            "QUEUE_NAME",
+            "GCS_BUCKET_NAME",
+            "CORS_ALLOW_ORIGINS",
+            "MAX_OCR_FILE_SIZE_MB",
+            "MAX_TRANSCRIPTION_FILE_SIZE_MB",
+        ],
     )

@@ -28,6 +28,28 @@ r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 QUEUE_NAME = os.getenv("QUEUE_NAME", "doc_jobs")
 IDEMPOTENCY_TTL_SEC = int(os.getenv("IDEMPOTENCY_TTL_SEC", "900"))
 
+MAX_OCR_FILE_SIZE_MB = int(os.getenv("MAX_OCR_FILE_SIZE_MB", "25"))
+MAX_TRANSCRIPTION_FILE_SIZE_MB = int(os.getenv("MAX_TRANSCRIPTION_FILE_SIZE_MB", "100"))
+MAX_OCR_FILE_SIZE_BYTES = MAX_OCR_FILE_SIZE_MB * 1024 * 1024
+MAX_TRANSCRIPTION_FILE_SIZE_BYTES = MAX_TRANSCRIPTION_FILE_SIZE_MB * 1024 * 1024
+
+ALLOWED_OCR_EXTENSIONS = {
+    ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp",
+}
+ALLOWED_TRANSCRIPTION_EXTENSIONS = {
+    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma",
+    ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v",
+}
+
+ALLOWED_OCR_MIME_PREFIXES = (
+    "application/pdf",
+    "image/",
+)
+ALLOWED_TRANSCRIPTION_MIME_PREFIXES = (
+    "audio/",
+    "video/",
+)
+
 
 def make_output_filename(uploaded_name: str) -> str:
     base = os.path.basename(uploaded_name or "transcript")
@@ -45,6 +67,62 @@ def get_upload_size_bytes(file_obj) -> int:
     size = file_obj.tell()
     file_obj.seek(pos, os.SEEK_SET)
     return int(size)
+
+
+def _bad_request(error_code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=400, detail={"error_code": error_code, "error_message": message})
+
+
+def _extension(filename: str | None) -> str:
+    return os.path.splitext(str(filename or "").strip().lower())[1]
+
+
+def _mime_allowed(content_type: str | None, prefixes: tuple[str, ...]) -> bool:
+    mime = str(content_type or "").strip().lower()
+    if not mime:
+        return False
+    return any(mime.startswith(prefix) for prefix in prefixes)
+
+
+def validate_upload_constraints(file: UploadFile, job_type: str, input_size_bytes: int) -> None:
+    filename = str(file.filename or "").strip()
+    if not filename:
+        raise _bad_request("INVALID_FILENAME", "Filename is required")
+
+    ext = _extension(filename)
+    mime = str(file.content_type or "").strip().lower()
+
+    if job_type == "OCR":
+        if ext not in ALLOWED_OCR_EXTENSIONS:
+            raise _bad_request(
+                "UNSUPPORTED_FILE_TYPE",
+                f"OCR supports: {', '.join(sorted(ALLOWED_OCR_EXTENSIONS))}",
+            )
+        if mime and not _mime_allowed(mime, ALLOWED_OCR_MIME_PREFIXES):
+            raise _bad_request("UNSUPPORTED_MIME_TYPE", f"Unsupported OCR MIME type: {mime}")
+        if input_size_bytes > MAX_OCR_FILE_SIZE_BYTES:
+            raise _bad_request(
+                "FILE_TOO_LARGE",
+                f"OCR file exceeds max {MAX_OCR_FILE_SIZE_MB} MB",
+            )
+        return
+
+    if job_type == "TRANSCRIPTION":
+        if ext not in ALLOWED_TRANSCRIPTION_EXTENSIONS:
+            raise _bad_request(
+                "UNSUPPORTED_FILE_TYPE",
+                f"Transcription supports: {', '.join(sorted(ALLOWED_TRANSCRIPTION_EXTENSIONS))}",
+            )
+        if mime and not _mime_allowed(mime, ALLOWED_TRANSCRIPTION_MIME_PREFIXES):
+            raise _bad_request("UNSUPPORTED_MIME_TYPE", f"Unsupported transcription MIME type: {mime}")
+        if input_size_bytes > MAX_TRANSCRIPTION_FILE_SIZE_BYTES:
+            raise _bad_request(
+                "FILE_TOO_LARGE",
+                f"Transcription file exceeds max {MAX_TRANSCRIPTION_FILE_SIZE_MB} MB",
+            )
+        return
+
+    raise _bad_request("INVALID_JOB_TYPE", "Invalid job type")
 
 
 def normalize_idempotency_key(raw: str | None) -> str:
@@ -153,6 +231,22 @@ async def upload(
     )
 
     input_size_bytes = get_upload_size_bytes(file.file)
+    try:
+        validate_upload_constraints(file=file, job_type=job_type, input_size_bytes=input_size_bytes)
+    except HTTPException as exc:
+        incr("api_jobs_submit_failed_total", reason="upload_validation_failed", job_type=job_type or "")
+        log_stage(
+            job_id=job_id,
+            stage="UPLOAD_VALIDATION",
+            event="FAILED",
+            user=email,
+            job_type=job_type,
+            filename=file.filename,
+            input_size_bytes=input_size_bytes,
+            request_id=request_id,
+            error=str(exc.detail),
+        )
+        raise
 
     log_stage(
         job_id=job_id,
