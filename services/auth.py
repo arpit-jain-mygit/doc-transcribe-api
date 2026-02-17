@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 # services/auth.py
 import os
 import time
@@ -34,14 +35,17 @@ BLOCKED_SET = "auth:users:blocked"
 # Auth Logic (DEFAULT ALLOW)
 # -----------------------------------------------------------------------------
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _unauthorized(error_code: str, message: str) -> HTTPException:
     return HTTPException(status_code=401, detail={"error_code": error_code, "error_message": message})
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _forbidden(error_code: str, message: str) -> HTTPException:
     return HTTPException(status_code=403, detail={"error_code": error_code, "error_message": message})
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def verify_google_id_token(token: str) -> dict:
     if not token:
         raise _unauthorized("AUTH_MISSING_TOKEN", "Missing token")
@@ -110,6 +114,7 @@ def verify_google_id_token(token: str) -> dict:
     return payload
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def verify_google_token(authorization: str = Header(None)) -> dict:
     """
     Verifies Google ID token.

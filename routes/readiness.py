@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 import os
 
 import redis
@@ -8,6 +9,7 @@ router = APIRouter()
 
 
 @router.get("/ready")
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def ready():
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     bucket_name = os.getenv("GCS_BUCKET_NAME", "")

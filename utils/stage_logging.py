@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -7,6 +8,7 @@ from utils.request_id import get_request_id
 logger = logging.getLogger("api.stage")
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _norm(value: Any) -> Any:
     if isinstance(value, bool):
         return value
@@ -19,6 +21,7 @@ def _norm(value: Any) -> Any:
     return str(value)
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def log_stage(
     *,
     job_id: str,

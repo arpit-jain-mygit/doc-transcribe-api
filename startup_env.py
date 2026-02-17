@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 import logging
 import os
 from typing import List
@@ -5,10 +6,12 @@ from typing import List
 logger = logging.getLogger("api.startup")
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _is_blank(value: str | None) -> bool:
     return value is None or not str(value).strip()
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _validate_redis_url(value: str | None, key: str, errors: List[str]) -> None:
     if _is_blank(value):
         errors.append(f"{key} is required")
@@ -17,6 +20,7 @@ def _validate_redis_url(value: str | None, key: str, errors: List[str]) -> None:
         errors.append(f"{key} must start with redis:// or rediss://")
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _validate_cors_allow_origins(value: str | None, errors: List[str]) -> None:
     if _is_blank(value):
         errors.append("CORS_ALLOW_ORIGINS is required")
@@ -35,6 +39,7 @@ def _validate_cors_allow_origins(value: str | None, errors: List[str]) -> None:
             errors.append(f"CORS origin must start with http:// or https://: {origin}")
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _validate_positive_int_env(name: str, default: int, errors: List[str]) -> None:
     raw = os.getenv(name)
     if _is_blank(raw):
@@ -50,6 +55,7 @@ def _validate_positive_int_env(name: str, default: int, errors: List[str]) -> No
         errors.append(f"{name} must be > 0")
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _validate_non_negative_int_env(name: str, default: int, errors: List[str]) -> None:
     raw = os.getenv(name)
     if _is_blank(raw):
@@ -65,6 +71,7 @@ def _validate_non_negative_int_env(name: str, default: int, errors: List[str]) -
         errors.append(f"{name} must be >= 0")
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def validate_startup_env() -> None:
     errors: List[str] = []
     warnings: List[str] = []

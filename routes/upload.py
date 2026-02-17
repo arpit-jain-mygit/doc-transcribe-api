@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 # routes/upload.py
 from fastapi import APIRouter, UploadFile, File, Form, Depends, Header
 
@@ -9,6 +10,7 @@ router = APIRouter()
 
 
 @router.post("/upload")
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 async def upload(
     file: UploadFile = File(...),
     job_type: str = Form(..., alias="type"),

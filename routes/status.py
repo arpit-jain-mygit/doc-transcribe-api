@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 # routes/status.py
 import os
 import redis
@@ -14,6 +15,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def normalize_failure_fields(data: dict) -> None:
     status = (data.get("status") or "").upper()
     if status != "FAILED":
@@ -30,6 +32,7 @@ def normalize_failure_fields(data: dict) -> None:
 
 
 @router.get("/status/{job_id}")
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def get_status(
     job_id: str,
     user=Depends(verify_google_token),

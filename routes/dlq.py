@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 import json
 from fastapi import APIRouter
 from services.redis_client import redis_client
@@ -7,6 +8,7 @@ router = APIRouter(prefix="/dlq", tags=["dlq"])
 
 
 @router.get("")
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def list_dead_letter_jobs(limit: int = 50):
     raw = redis_client.lrange(DLQ_NAME, 0, limit - 1)
     return [json.loads(j) for j in raw]

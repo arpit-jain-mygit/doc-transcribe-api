@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 # -*- coding: utf-8 -*-
 
 import os
@@ -9,6 +10,7 @@ from google.cloud import storage
 _client = None
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _get_client():
     global _client
     if _client:
@@ -27,6 +29,7 @@ def _get_client():
 # ---------------------------------------------------------
 # UPLOAD FILE (stream-safe)
 # ---------------------------------------------------------
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def upload_file(file_obj, destination_path: str) -> dict:
     bucket_name = os.getenv("GCS_BUCKET_NAME")
     if not bucket_name:
@@ -48,6 +51,7 @@ def upload_file(file_obj, destination_path: str) -> dict:
 # ---------------------------------------------------------
 # UPLOAD TEXT
 # ---------------------------------------------------------
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def upload_text(*, content: str, destination_path: str) -> dict:
     bucket_name = os.getenv("GCS_BUCKET_NAME")
     if not bucket_name:
@@ -72,6 +76,7 @@ def upload_text(*, content: str, destination_path: str) -> dict:
 # ---------------------------------------------------------
 # SIGNED DOWNLOAD URL (STANDARDIZED)
 # ---------------------------------------------------------
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def generate_signed_url(
     *,
     bucket_name: str,

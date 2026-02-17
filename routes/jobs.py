@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 # routes/jobs.py
 import os
 import redis
@@ -23,6 +24,7 @@ r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
 @router.get("/jobs")
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def list_jobs(
     user=Depends(verify_google_token),
     job_type: str | None = Query(default=None, description="Filter by job type, e.g. TRANSCRIPTION/OCR"),
@@ -50,6 +52,7 @@ def list_jobs(
     user_jobs_key = f"user_jobs:{email}"
     total_user_jobs = r.llen(user_jobs_key)
 
+    # User value: This step keeps the user OCR/transcription flow accurate and dependable.
     def enrich(job_id: str, data: dict) -> dict:
         if not data.get("request_id"):
             rid = get_request_id()
@@ -251,6 +254,7 @@ def list_jobs(
 
 
 @router.post("/jobs/{job_id}/cancel")
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def cancel_job(job_id: str, user=Depends(verify_google_token)):
     email = user["email"].lower()
     log_stage(job_id=job_id, stage="JOB_CANCEL", event="STARTED", user=email)

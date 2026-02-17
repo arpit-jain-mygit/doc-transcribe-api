@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 # services/upload_orchestrator.py
 import hashlib
 import json
@@ -56,6 +57,7 @@ ALLOWED_TRANSCRIPTION_MIME_PREFIXES = (
 )
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def resolve_target_queue(job_type: str) -> str:
     if not FEATURE_QUEUE_PARTITIONING:
         return QUEUE_NAME
@@ -64,6 +66,7 @@ def resolve_target_queue(job_type: str) -> str:
     return QUEUE_NAME_TRANSCRIPTION
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _parse_pdf_page_count(file_obj) -> int | None:
     try:
         pos = file_obj.tell()
@@ -83,6 +86,7 @@ def _parse_pdf_page_count(file_obj) -> int | None:
         return None
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def derive_total_pages(file: UploadFile, job_type: str) -> int | None:
     if job_type != "OCR":
         return None
@@ -92,6 +96,7 @@ def derive_total_pages(file: UploadFile, job_type: str) -> int | None:
     return 1
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def make_output_filename(uploaded_name: str) -> str:
     base = os.path.basename(uploaded_name or "transcript")
     stem, _ = os.path.splitext(base)
@@ -102,6 +107,7 @@ def make_output_filename(uploaded_name: str) -> str:
     return f"{stem}.txt"
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def get_upload_size_bytes(file_obj) -> int:
     pos = file_obj.tell()
     file_obj.seek(0, os.SEEK_END)
@@ -110,14 +116,17 @@ def get_upload_size_bytes(file_obj) -> int:
     return int(size)
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _bad_request(error_code: str, message: str) -> HTTPException:
     return HTTPException(status_code=400, detail={"error_code": error_code, "error_message": message})
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _extension(filename: str | None) -> str:
     return os.path.splitext(str(filename or "").strip().lower())[1]
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _mime_allowed(content_type: str | None, prefixes: tuple[str, ...]) -> bool:
     mime = str(content_type or "").strip().lower()
     if not mime:
@@ -125,6 +134,7 @@ def _mime_allowed(content_type: str | None, prefixes: tuple[str, ...]) -> bool:
     return any(mime.startswith(prefix) for prefix in prefixes)
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def validate_upload_constraints(file: UploadFile, job_type: str, input_size_bytes: int) -> None:
     filename = str(file.filename or "").strip()
     if not filename:
@@ -166,6 +176,7 @@ def validate_upload_constraints(file: UploadFile, job_type: str, input_size_byte
     raise _bad_request("INVALID_JOB_TYPE", "Invalid job type")
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def normalize_idempotency_key(raw: str | None) -> str:
     if not raw:
         return ""
@@ -173,20 +184,24 @@ def normalize_idempotency_key(raw: str | None) -> str:
     return key[:128]
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def idempotency_redis_key(email: str, job_type: str, idem_key: str) -> str:
     return f"upload_idempotency:{email}:{job_type}:{idem_key}"
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def derive_idempotent_job_id(email: str, job_type: str, idem_key: str) -> str:
     digest = hashlib.sha256(f"{email}|{job_type}|{idem_key}".encode("utf-8")).hexdigest()
     return digest[:32]
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def _build_reuse_response(job_id: str, data: dict, request_id: str) -> dict:
     reused_request_id = str(data.get("request_id") or request_id or "")
     return {"job_id": job_id, "request_id": reused_request_id, "reused": True}
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def try_reuse_idempotent_job(*, email: str, job_type: str, idem_key: str, request_id: str) -> dict | None:
     map_key = idempotency_redis_key(email, job_type, idem_key)
     existing_job_id = r.get(map_key)
@@ -228,6 +243,7 @@ def try_reuse_idempotent_job(*, email: str, job_type: str, idem_key: str, reques
     return None
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def submit_upload_job(
     *,
     file: UploadFile,

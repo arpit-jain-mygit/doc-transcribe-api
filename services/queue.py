@@ -1,3 +1,4 @@
+# User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 import redis
 import os
 import json
@@ -17,6 +18,7 @@ r = redis.Redis.from_url(
 QUEUE_NAME = os.getenv("QUEUE_NAME", "doc_jobs")
 
 
+# User value: This step keeps the user OCR/transcription flow accurate and dependable.
 def enqueue_job(job_id: str, job: dict):
     payload = job.copy()
     payload["job_id"] = job_id
