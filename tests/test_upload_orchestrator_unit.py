@@ -1,11 +1,14 @@
 import unittest
+from io import BytesIO
 from fastapi import HTTPException
 
 from services.upload_orchestrator import (
+    derive_total_pages,
     derive_idempotent_job_id,
     idempotency_redis_key,
     make_output_filename,
     normalize_idempotency_key,
+    resolve_target_queue,
     validate_upload_constraints,
 )
 
@@ -14,6 +17,7 @@ class DummyUploadFile:
     def __init__(self, filename: str, content_type: str):
         self.filename = filename
         self.content_type = content_type
+        self.file = BytesIO(b"dummy")
 
 
 class UploadOrchestratorUnitTests(unittest.TestCase):
@@ -50,6 +54,15 @@ class UploadOrchestratorUnitTests(unittest.TestCase):
         detail = ctx.exception.detail
         self.assertIsInstance(detail, dict)
         self.assertEqual(detail.get("error_code"), "UNSUPPORTED_MIME_TYPE")
+
+    def test_resolve_target_queue_default(self):
+        q = resolve_target_queue("OCR")
+        self.assertIsInstance(q, str)
+        self.assertNotEqual(q.strip(), "")
+
+    def test_derive_total_pages_for_image(self):
+        file = DummyUploadFile("img.png", "image/png")
+        self.assertEqual(derive_total_pages(file, "OCR"), 1)
 
 
 if __name__ == "__main__":

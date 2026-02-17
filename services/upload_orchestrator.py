@@ -12,7 +12,13 @@ import redis
 from fastapi import HTTPException, UploadFile
 
 from schemas.job_contract import CONTRACT_VERSION, JOB_TYPES, JOB_STATUS_QUEUED
+from services.feature_flags import (
+    FEATURE_DURATION_PAGE_LIMITS,
+    FEATURE_QUEUE_PARTITIONING,
+    FEATURE_UPLOAD_QUOTAS,
+)
 from services.gcs import upload_file
+from services.quota import enforce_pages_and_duration_limits, enforce_upload_quotas, register_daily_job_usage
 from utils.metrics import incr
 from utils.stage_logging import log_stage
 from utils.status_machine import transition_hset
@@ -23,6 +29,8 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 QUEUE_NAME = os.getenv("QUEUE_NAME", "doc_jobs")
+QUEUE_NAME_OCR = os.getenv("QUEUE_NAME_OCR", "doc_jobs_ocr")
+QUEUE_NAME_TRANSCRIPTION = os.getenv("QUEUE_NAME_TRANSCRIPTION", "doc_jobs_transcription")
 IDEMPOTENCY_TTL_SEC = int(os.getenv("IDEMPOTENCY_TTL_SEC", "900"))
 
 MAX_OCR_FILE_SIZE_MB = int(os.getenv("MAX_OCR_FILE_SIZE_MB", "25"))
@@ -46,6 +54,42 @@ ALLOWED_TRANSCRIPTION_MIME_PREFIXES = (
     "audio/",
     "video/",
 )
+
+
+def resolve_target_queue(job_type: str) -> str:
+    if not FEATURE_QUEUE_PARTITIONING:
+        return QUEUE_NAME
+    if job_type == "OCR":
+        return QUEUE_NAME_OCR
+    return QUEUE_NAME_TRANSCRIPTION
+
+
+def _parse_pdf_page_count(file_obj) -> int | None:
+    try:
+        pos = file_obj.tell()
+        file_obj.seek(0, os.SEEK_SET)
+        blob = file_obj.read()
+        file_obj.seek(pos, os.SEEK_SET)
+        if not blob:
+            return None
+        text = blob.decode("latin-1", errors="ignore")
+        # Lightweight heuristic to avoid adding heavy PDF dependency at API layer.
+        count = text.count("/Type /Page")
+        if count <= 0:
+            return None
+        # Some PDFs include "/Pages" nodes; keep floor at 1 for valid matches.
+        return max(1, count - text.count("/Type /Pages"))
+    except Exception:
+        return None
+
+
+def derive_total_pages(file: UploadFile, job_type: str) -> int | None:
+    if job_type != "OCR":
+        return None
+    ext = _extension(file.filename)
+    if ext == ".pdf":
+        return _parse_pdf_page_count(file.file)
+    return 1
 
 
 def make_output_filename(uploaded_name: str) -> str:
@@ -184,13 +228,22 @@ def try_reuse_idempotent_job(*, email: str, job_type: str, idem_key: str, reques
     return None
 
 
-def submit_upload_job(*, file: UploadFile, job_type: str, email: str, request_id: str, idempotency_key: str | None) -> dict:
+def submit_upload_job(
+    *,
+    file: UploadFile,
+    job_type: str,
+    email: str,
+    request_id: str,
+    idempotency_key: str | None,
+    media_duration_sec: float | None = None,
+) -> dict:
     if job_type not in JOB_TYPES:
         incr("api_jobs_submit_failed_total", reason="invalid_job_type", job_type=job_type or "")
         logger.warning("upload_validation_failed invalid_job_type type=%s", job_type)
         raise HTTPException(status_code=400, detail="Invalid job type")
 
     user_email = email.lower()
+    queue_name = resolve_target_queue(job_type)
     idem_key = normalize_idempotency_key(idempotency_key)
 
     if idem_key:
@@ -217,12 +270,22 @@ def submit_upload_job(*, file: UploadFile, job_type: str, email: str, request_id
         user=user_email,
         job_type=job_type,
         filename=file.filename,
-        queue=QUEUE_NAME,
+        queue=queue_name,
         contract_version=CONTRACT_VERSION,
         request_id=request_id,
     )
 
+    if FEATURE_UPLOAD_QUOTAS:
+        enforce_upload_quotas(r=r, email=user_email, request_id=request_id or "", job_type=job_type)
+
     input_size_bytes = get_upload_size_bytes(file.file)
+    total_pages = derive_total_pages(file, job_type)
+    if FEATURE_DURATION_PAGE_LIMITS:
+        enforce_pages_and_duration_limits(
+            job_type=job_type,
+            total_pages=total_pages,
+            media_duration_sec=media_duration_sec,
+        )
     try:
         validate_upload_constraints(file=file, job_type=job_type, input_size_bytes=input_size_bytes)
     except HTTPException as exc:
@@ -302,6 +365,8 @@ def submit_upload_job(*, file: UploadFile, job_type: str, email: str, request_id
                 "input_filename": file.filename,
                 "input_size_bytes": input_size_bytes,
                 "output_filename": output_filename,
+                "total_pages": total_pages if total_pages is not None else "",
+                "duration_sec": media_duration_sec if media_duration_sec is not None else "",
                 "created_at": now_ts,
                 "updated_at": now_ts,
                 "request_id": request_id or "",
@@ -314,6 +379,7 @@ def submit_upload_job(*, file: UploadFile, job_type: str, email: str, request_id
 
         if idem_key:
             r.set(idempotency_redis_key(user_email, job_type, idem_key), job_id, ex=IDEMPOTENCY_TTL_SEC)
+        register_daily_job_usage(r=r, email=user_email)
 
         r.lpush(f"user_jobs:{user_email}", job_id)
         log_stage(
@@ -343,6 +409,7 @@ def submit_upload_job(*, file: UploadFile, job_type: str, email: str, request_id
         "job_id": job_id,
         "job_type": job_type,
         "source": source,
+        "queue": queue_name,
         "input_gcs_uri": gcs["gcs_uri"],
         "filename": file.filename,
         "output_filename": output_filename,
@@ -357,15 +424,15 @@ def submit_upload_job(*, file: UploadFile, job_type: str, email: str, request_id
         user=user_email,
         job_type=job_type,
         source=source,
-        queue=QUEUE_NAME,
+        queue=queue_name,
     )
     try:
         enqueue_guard_key = f"job_enqueue_once:{job_id}"
         enqueue_ttl = IDEMPOTENCY_TTL_SEC if idem_key else 24 * 3600
         should_enqueue = r.set(enqueue_guard_key, "1", nx=True, ex=enqueue_ttl)
         if should_enqueue:
-            r.rpush(QUEUE_NAME, json.dumps(payload))
-            queue_depth = r.llen(QUEUE_NAME)
+            r.rpush(queue_name, json.dumps(payload))
+            queue_depth = r.llen(queue_name)
             log_stage(
                 job_id=job_id,
                 stage="REDIS_QUEUE_ENQUEUE",
@@ -373,7 +440,7 @@ def submit_upload_job(*, file: UploadFile, job_type: str, email: str, request_id
                 user=user_email,
                 job_type=job_type,
                 source=source,
-                queue=QUEUE_NAME,
+                queue=queue_name,
                 queue_depth=queue_depth,
             )
         else:
@@ -384,7 +451,7 @@ def submit_upload_job(*, file: UploadFile, job_type: str, email: str, request_id
                 user=user_email,
                 job_type=job_type,
                 source=source,
-                queue=QUEUE_NAME,
+                queue=queue_name,
                 message="duplicate_enqueue_skipped",
             )
             incr("api_jobs_idempotent_reused_total", job_type=job_type)
@@ -396,7 +463,7 @@ def submit_upload_job(*, file: UploadFile, job_type: str, email: str, request_id
             user=user_email,
             job_type=job_type,
             source=source,
-            queue=QUEUE_NAME,
+            queue=queue_name,
             error=f"{exc.__class__.__name__}: {exc}",
         )
         raise HTTPException(status_code=503, detail="Queue push failed") from exc

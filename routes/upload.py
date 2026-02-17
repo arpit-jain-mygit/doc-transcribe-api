@@ -13,6 +13,7 @@ async def upload(
     file: UploadFile = File(...),
     job_type: str = Form(..., alias="type"),
     idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+    media_duration_sec: float | None = Header(default=None, alias="X-Media-Duration-Sec"),
     user=Depends(verify_google_token),
 ):
     request_id = get_request_id()
@@ -22,4 +23,5 @@ async def upload(
         email=user["email"],
         request_id=request_id,
         idempotency_key=idempotency_key,
+        media_duration_sec=media_duration_sec,
     )
