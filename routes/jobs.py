@@ -32,6 +32,9 @@ def list_jobs(
     include_counts: bool = Query(default=False, description="Include counts_by_status in response"),
 ):
     email = user["email"].lower()
+    status_norm = status.strip().upper() if status else None
+    job_type_norm = job_type.strip().upper() if job_type else None
+
     log_stage(
         job_id="jobs-list",
         stage="JOBS_LIST",
@@ -44,7 +47,8 @@ def list_jobs(
         include_counts=include_counts,
     )
 
-    job_ids = r.lrange(f"user_jobs:{email}", 0, -1)
+    user_jobs_key = f"user_jobs:{email}"
+    total_user_jobs = r.llen(user_jobs_key)
 
     def enrich(job_id: str, data: dict) -> dict:
         if not data.get("request_id"):
@@ -72,6 +76,7 @@ def list_jobs(
 
     # Backward compatibility: when no pagination requested, return full array.
     if limit is None:
+        job_ids = r.lrange(user_jobs_key, 0, -1)
         jobs = []
         for job_id in job_ids:
             data = r.hgetall(f"job_status:{job_id}")
@@ -79,6 +84,7 @@ def list_jobs(
                 continue
             jobs.append(enrich(job_id, data))
 
+        incr("api_jobs_list_total", mode="all", include_counts="false", filtered="false")
         log_stage(
             job_id="jobs-list",
             stage="JOBS_LIST",
@@ -86,33 +92,87 @@ def list_jobs(
             user=email,
             returned_count=len(jobs),
             paginated=False,
+            total_user_jobs=total_user_jobs,
+            scanned_count=len(job_ids),
+            fast_path=False,
         )
         return jobs
 
-    status_norm = status.strip().upper() if status else None
-    job_type_norm = job_type.strip().upper() if job_type else None
+    # Fast path for primary UI use-case: paginated, no filters, no counts.
+    if not include_counts and not status_norm and not job_type_norm:
+        selected_job_ids = r.lrange(user_jobs_key, offset, offset + limit)
+        has_more = len(selected_job_ids) > limit
+        page_job_ids = selected_job_ids[:limit]
+
+        details_pipe = r.pipeline(transaction=False)
+        for job_id in page_job_ids:
+            details_pipe.hgetall(f"job_status:{job_id}")
+        details_rows = details_pipe.execute()
+
+        items = []
+        for idx, data in enumerate(details_rows):
+            if not data:
+                continue
+            items.append(enrich(page_job_ids[idx], data))
+
+        response = {
+            "items": items,
+            "offset": offset,
+            "limit": limit,
+            "next_offset": (offset + len(items)) if has_more else None,
+            "has_more": has_more,
+            "total": None,
+        }
+
+        incr("api_jobs_list_total", mode="paged", include_counts="false", filtered="false")
+        log_stage(
+            job_id="jobs-list",
+            stage="JOBS_LIST",
+            event="COMPLETED",
+            user=email,
+            returned_count=len(items),
+            paginated=True,
+            has_more=has_more,
+            next_offset=response.get("next_offset"),
+            total_user_jobs=total_user_jobs,
+            scanned_count=len(selected_job_ids),
+            fast_path=True,
+        )
+        return response
+
     counts_by_status = {k: 0 for k in TRACKED_HISTORY_STATUSES}
     counts_by_type = {"TRANSCRIPTION": 0, "OCR": 0}
 
     selected_job_ids: list[str] = []
     matched_seen = 0
     matched_total = 0
+    scanned_count = 0
 
-    meta_pipe = r.pipeline(transaction=False)
-    for job_id in job_ids:
-        meta_pipe.hmget(f"job_status:{job_id}", "status", "job_type", "type")
-    meta_rows = meta_pipe.execute()
+    job_ids = r.lrange(user_jobs_key, 0, -1)
+
+    if include_counts:
+        meta_pipe = r.pipeline(transaction=False)
+        for job_id in job_ids:
+            meta_pipe.hmget(f"job_status:{job_id}", "status", "job_type", "type")
+        meta_rows = meta_pipe.execute()
+    else:
+        meta_rows = None
 
     for idx, job_id in enumerate(job_ids):
-        row = meta_rows[idx]
+        scanned_count += 1
+
+        if include_counts:
+            row = meta_rows[idx]
+        else:
+            row = r.hmget(f"job_status:{job_id}", "status", "job_type", "type")
+
         if not row:
             continue
 
         row_status = (row[0] or "").upper()
         row_type = (row[1] or row[2] or "").upper()
-        if include_counts:
-            if row_type in counts_by_type:
-                counts_by_type[row_type] += 1
+        if include_counts and row_type in counts_by_type:
+            counts_by_type[row_type] += 1
 
         if job_type_norm and row_type != job_type_norm:
             continue
@@ -167,6 +227,12 @@ def list_jobs(
         response["counts_by_status"] = counts_by_status
         response["counts_by_type"] = counts_by_type
 
+    incr(
+        "api_jobs_list_total",
+        mode="paged",
+        include_counts="true" if include_counts else "false",
+        filtered="true" if (status_norm or job_type_norm) else "false",
+    )
     log_stage(
         job_id="jobs-list",
         stage="JOBS_LIST",
@@ -176,6 +242,10 @@ def list_jobs(
         paginated=True,
         has_more=has_more,
         next_offset=response.get("next_offset"),
+        total_user_jobs=total_user_jobs,
+        scanned_count=scanned_count,
+        matched_total=matched_total,
+        fast_path=False,
     )
     return response
 
