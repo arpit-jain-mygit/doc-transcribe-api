@@ -2,6 +2,7 @@
 import os
 import time
 import redis
+from redis.exceptions import RedisError
 from fastapi import HTTPException, Header
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -91,8 +92,17 @@ def verify_google_id_token(token: str) -> dict:
     # -------------------------------------------------------------------------
     # Blocklist check (ONLY restriction)
     # -------------------------------------------------------------------------
-    if r.sismember(BLOCKED_SET, email):
-        raise _forbidden("AUTH_USER_BLOCKED", "User access blocked")
+    try:
+        if r.sismember(BLOCKED_SET, email):
+            raise _forbidden("AUTH_USER_BLOCKED", "User access blocked")
+    except RedisError:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": "INFRA_REDIS",
+                "error_message": "Authentication backend temporarily unavailable",
+            },
+        )
 
     # -------------------------------------------------------------------------
     # Default allow

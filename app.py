@@ -107,7 +107,7 @@ def _to_error_code(status_code: int, detail) -> str:
 
 
 def _error_body(*, request: Request, status_code: int, detail, error_message: str | None = None) -> dict:
-    request_id = get_request_id()
+    request_id = get_request_id() or normalize_request_id(request.headers.get(REQUEST_ID_HEADER))
     body = {
         "error_code": _to_error_code(status_code, detail),
         "error_message": error_message or _extract_error_message(detail),
@@ -153,7 +153,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    request_id = get_request_id()
+    request_id = get_request_id() or normalize_request_id(request.headers.get(REQUEST_ID_HEADER))
     logger.exception(
         "request_failed_unhandled path=%s request_id=%s error=%s: %s",
         request.url.path,
