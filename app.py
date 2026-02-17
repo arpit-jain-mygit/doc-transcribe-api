@@ -5,6 +5,7 @@ import time
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -67,24 +68,71 @@ def _extract_error_message(detail) -> str:
     return str(detail)
 
 
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    detail = exc.detail
+def _to_error_code(status_code: int, detail) -> str:
+    if isinstance(detail, dict) and detail.get("error_code"):
+        return str(detail.get("error_code")).strip().upper()
+
+    msg = _extract_error_message(detail).lower()
+    if status_code == 401:
+        if "missing authorization" in msg:
+            return "AUTH_MISSING_TOKEN"
+        if "invalid google token" in msg:
+            return "AUTH_INVALID_TOKEN"
+        if "email not found" in msg:
+            return "AUTH_EMAIL_MISSING"
+        if "access blocked" in msg:
+            return "AUTH_USER_BLOCKED"
+        return "AUTH_UNAUTHORIZED"
+    if status_code == 403:
+        return "AUTH_FORBIDDEN"
+    if status_code == 404:
+        return "RESOURCE_NOT_FOUND"
+    if status_code == 409:
+        return "STATE_CONFLICT"
+    if status_code == 400:
+        return "INVALID_REQUEST"
+    return f"HTTP_{status_code}"
+
+
+def _error_body(*, request: Request, status_code: int, detail, error_message: str | None = None) -> dict:
     request_id = get_request_id()
     body = {
-        "error_code": f"HTTP_{exc.status_code}",
-        "error_message": _extract_error_message(detail),
+        "error_code": _to_error_code(status_code, detail),
+        "error_message": error_message or _extract_error_message(detail),
         "detail": detail,
         "path": request.url.path,
         "request_id": request_id,
     }
-    if isinstance(detail, dict) and detail.get("error_code"):
-        body["error_code"] = str(detail.get("error_code"))
+    return body
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    detail = exc.errors()
+    body = _error_body(
+        request=request,
+        status_code=422,
+        detail=detail,
+        error_message="Request validation failed",
+    )
+    body["error_code"] = "VALIDATION_ERROR"
+    logger.warning(
+        "request_failed_validation status=422 path=%s request_id=%s error_code=%s",
+        request.url.path,
+        body["request_id"],
+        body["error_code"],
+    )
+    return JSONResponse(status_code=422, content=body)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    body = _error_body(request=request, status_code=exc.status_code, detail=exc.detail)
     logger.warning(
         "request_failed status=%s path=%s request_id=%s error_code=%s error_message=%s",
         exc.status_code,
         request.url.path,
-        request_id,
+        body["request_id"],
         body["error_code"],
         body["error_message"],
     )
@@ -93,19 +141,22 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    error_message = f"{exc.__class__.__name__}: {exc}"
     request_id = get_request_id()
-    logger.exception("request_failed_unhandled path=%s request_id=%s error=%s", request.url.path, request_id, error_message)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error_code": "INTERNAL_SERVER_ERROR",
-            "error_message": error_message,
-            "detail": "Unhandled server exception",
-            "path": request.url.path,
-            "request_id": request_id,
-        },
+    logger.exception(
+        "request_failed_unhandled path=%s request_id=%s error=%s: %s",
+        request.url.path,
+        request_id,
+        exc.__class__.__name__,
+        exc,
     )
+    body = _error_body(
+        request=request,
+        status_code=500,
+        detail="Unhandled server exception",
+        error_message="Internal server error",
+    )
+    body["error_code"] = "INTERNAL_SERVER_ERROR"
+    return JSONResponse(status_code=500, content=body)
 
 
 app.add_middleware(
