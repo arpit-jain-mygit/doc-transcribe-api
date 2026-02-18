@@ -29,6 +29,14 @@ TRACKED_HISTORY_STATUSES = (
     JOB_STATUS_CANCELLED,
 )
 
+INTAKE_PRECHECK_FIELDS = (
+    "detected_job_type",
+    "warnings",
+    "eta_sec",
+    "confidence",
+    "reasons",
+)
+
 CANONICAL_FIELDS = (
     "contract_version",
     "request_id",
@@ -49,4 +57,5 @@ CANONICAL_FIELDS = (
     "cancel_requested",
     "created_at",
     "updated_at",
+    *INTAKE_PRECHECK_FIELDS,
 )
