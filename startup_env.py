@@ -72,6 +72,17 @@ def _validate_non_negative_int_env(name: str, default: int, errors: List[str]) -
 
 
 # User value: prevents invalid input so users get reliable OCR/transcription outcomes.
+def _validate_bool_flag_env(name: str, errors: List[str]) -> None:
+    raw = os.getenv(name)
+    if _is_blank(raw):
+        return
+    allowed = {"0", "1", "true", "false", "yes", "no", "on", "off"}
+    value = str(raw).strip().lower()
+    if value not in allowed:
+        errors.append(f"{name} must be one of {sorted(allowed)}")
+
+
+# User value: prevents invalid input so users get reliable OCR/transcription outcomes.
 def validate_startup_env() -> None:
     errors: List[str] = []
     warnings: List[str] = []
@@ -93,6 +104,7 @@ def validate_startup_env() -> None:
     _validate_non_negative_int_env("MAX_TRANSCRIPTION_DURATION_SEC", 0, errors)
     _validate_non_negative_int_env("DAILY_JOB_LIMIT_PER_USER", 0, errors)
     _validate_non_negative_int_env("ACTIVE_JOB_LIMIT_PER_USER", 0, errors)
+    _validate_bool_flag_env("FEATURE_SMART_INTAKE", errors)
 
     if _is_blank(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")):
         warnings.append(
@@ -121,5 +133,6 @@ def validate_startup_env() -> None:
             "MAX_TRANSCRIPTION_DURATION_SEC",
             "DAILY_JOB_LIMIT_PER_USER",
             "ACTIVE_JOB_LIMIT_PER_USER",
+            "FEATURE_SMART_INTAKE",
         ],
     )

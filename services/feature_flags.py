@@ -11,3 +11,9 @@ def _flag(name: str, default: bool = False) -> bool:
 FEATURE_QUEUE_PARTITIONING = _flag("FEATURE_QUEUE_PARTITIONING", False)
 FEATURE_UPLOAD_QUOTAS = _flag("FEATURE_UPLOAD_QUOTAS", False)
 FEATURE_DURATION_PAGE_LIMITS = _flag("FEATURE_DURATION_PAGE_LIMITS", False)
+FEATURE_SMART_INTAKE = _flag("FEATURE_SMART_INTAKE", False)
+
+
+# User value: supports is_smart_intake_enabled so users only see intake agent behavior when it is safely enabled.
+def is_smart_intake_enabled() -> bool:
+    return FEATURE_SMART_INTAKE
