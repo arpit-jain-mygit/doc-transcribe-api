@@ -19,6 +19,14 @@ from services.feature_flags import (
     FEATURE_UPLOAD_QUOTAS,
 )
 from services.gcs import upload_file
+from services.intake_precheck import build_precheck_warnings
+from services.intake_router import (
+    OCR_EXTENSIONS as ALLOWED_OCR_EXTENSIONS,
+    TRANSCRIPTION_EXTENSIONS as ALLOWED_TRANSCRIPTION_EXTENSIONS,
+    OCR_MIME_PREFIXES as ALLOWED_OCR_MIME_PREFIXES,
+    TRANSCRIPTION_MIME_PREFIXES as ALLOWED_TRANSCRIPTION_MIME_PREFIXES,
+    detect_route_from_metadata,
+)
 from services.quota import enforce_pages_and_duration_limits, enforce_upload_quotas, register_daily_job_usage
 from utils.metrics import incr
 from utils.stage_logging import log_stage
@@ -38,23 +46,6 @@ MAX_OCR_FILE_SIZE_MB = int(os.getenv("MAX_OCR_FILE_SIZE_MB", "25"))
 MAX_TRANSCRIPTION_FILE_SIZE_MB = int(os.getenv("MAX_TRANSCRIPTION_FILE_SIZE_MB", "100"))
 MAX_OCR_FILE_SIZE_BYTES = MAX_OCR_FILE_SIZE_MB * 1024 * 1024
 MAX_TRANSCRIPTION_FILE_SIZE_BYTES = MAX_TRANSCRIPTION_FILE_SIZE_MB * 1024 * 1024
-
-ALLOWED_OCR_EXTENSIONS = {
-    ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp",
-}
-ALLOWED_TRANSCRIPTION_EXTENSIONS = {
-    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma",
-    ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v",
-}
-
-ALLOWED_OCR_MIME_PREFIXES = (
-    "application/pdf",
-    "image/",
-)
-ALLOWED_TRANSCRIPTION_MIME_PREFIXES = (
-    "audio/",
-    "video/",
-)
 
 
 # User value: routes work so user OCR/transcription jobs are processed correctly.
@@ -294,8 +285,43 @@ def submit_upload_job(
     if FEATURE_UPLOAD_QUOTAS:
         enforce_upload_quotas(r=r, email=user_email, request_id=request_id or "", job_type=job_type)
 
+    route_detection = detect_route_from_metadata(file.filename, file.content_type)
+    log_stage(
+        job_id=job_id,
+        stage="UPLOAD_ROUTE_DETECT",
+        event="COMPLETED",
+        user=user_email,
+        job_type=job_type,
+        filename=file.filename,
+        request_id=request_id,
+        detected_job_type=route_detection.get("detected_job_type", "UNKNOWN"),
+        confidence=route_detection.get("confidence", 0.0),
+        reasons="|".join(route_detection.get("reasons") or []),
+    )
+
     input_size_bytes = get_upload_size_bytes(file.file)
     total_pages = derive_total_pages(file, job_type)
+
+    precheck_warnings = build_precheck_warnings(
+        job_type=job_type,
+        filename=file.filename,
+        mime_type=file.content_type,
+        file_size_bytes=input_size_bytes,
+        media_duration_sec=media_duration_sec,
+        pdf_page_count=total_pages,
+    )
+    if precheck_warnings:
+        log_stage(
+            job_id=job_id,
+            stage="UPLOAD_PRECHECK_WARNINGS",
+            event="COMPLETED",
+            user=user_email,
+            job_type=job_type,
+            filename=file.filename,
+            request_id=request_id,
+            warning_codes="|".join(w.get("code", "") for w in precheck_warnings),
+            warning_count=len(precheck_warnings),
+        )
     if FEATURE_DURATION_PAGE_LIMITS:
         enforce_pages_and_duration_limits(
             job_type=job_type,
