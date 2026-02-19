@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from schemas.requests import IntakePrecheckRequest
 from schemas.responses import IntakePrecheckResponse
 from services.auth import verify_google_token
-from services.feature_flags import is_smart_intake_enabled
+from services.cost_guardrail import evaluate_cost_guardrail
+from services.feature_flags import is_cost_guardrail_enabled, is_smart_intake_enabled
 from services.intake_eta import estimate_eta_sec
 from services.intake_precheck import build_precheck_warnings
 from services.intake_router import detect_route_from_metadata
@@ -70,6 +71,22 @@ async def intake_precheck(payload: IntakePrecheckRequest, user=Depends(verify_go
         media_duration_sec=payload.media_duration_sec,
         pdf_page_count=payload.pdf_page_count,
     )
+    cost = (
+        evaluate_cost_guardrail(
+            job_type=effective_job_type,
+            file_size_bytes=payload.file_size_bytes,
+            media_duration_sec=payload.media_duration_sec,
+            pdf_page_count=payload.pdf_page_count,
+        )
+        if is_cost_guardrail_enabled()
+        else {
+            "estimated_effort": "LOW",
+            "estimated_cost_band": "LOW",
+            "policy_decision": "ALLOW",
+            "policy_reason": "Cost guardrail is disabled",
+            "projected_cost_usd": 0.0,
+        }
+    )
 
     confidence = float(detected.get("confidence", 0.0))
     route = detected_job_type.upper()
@@ -86,6 +103,9 @@ async def intake_precheck(payload: IntakePrecheckRequest, user=Depends(verify_go
         warning_count=len(warnings),
         eta_sec=eta_sec,
         eta_bucket=_eta_bucket(eta_sec),
+        policy_decision=cost.get("policy_decision", "ALLOW"),
+        estimated_cost_band=cost.get("estimated_cost_band", "LOW"),
+        projected_cost_usd=cost.get("projected_cost_usd", 0.0),
     )
 
     incr("intake.precheck.decisions_total", route=route, job_type=effective_job_type)
@@ -98,4 +118,9 @@ async def intake_precheck(payload: IntakePrecheckRequest, user=Depends(verify_go
         eta_sec=eta_sec,
         confidence=confidence,
         reasons=list(detected.get("reasons") or []),
+        estimated_effort=cost.get("estimated_effort", "LOW"),
+        estimated_cost_band=cost.get("estimated_cost_band", "LOW"),
+        policy_decision=cost.get("policy_decision", "ALLOW"),
+        policy_reason=cost.get("policy_reason", ""),
+        projected_cost_usd=cost.get("projected_cost_usd", 0.0),
     )

@@ -14,10 +14,12 @@ from fastapi import HTTPException, UploadFile
 
 from schemas.job_contract import CONTRACT_VERSION, JOB_TYPES, JOB_STATUS_QUEUED
 from services.feature_flags import (
+    FEATURE_COST_GUARDRAIL,
     FEATURE_DURATION_PAGE_LIMITS,
     FEATURE_QUEUE_PARTITIONING,
     FEATURE_UPLOAD_QUOTAS,
 )
+from services.cost_guardrail import evaluate_cost_guardrail
 from services.gcs import upload_file
 from services.intake_precheck import build_precheck_warnings
 from services.intake_router import (
@@ -310,6 +312,49 @@ def submit_upload_job(
         media_duration_sec=media_duration_sec,
         pdf_page_count=total_pages,
     )
+    if FEATURE_COST_GUARDRAIL:
+        cost_eval = evaluate_cost_guardrail(
+            job_type=job_type,
+            file_size_bytes=input_size_bytes,
+            media_duration_sec=media_duration_sec,
+            pdf_page_count=total_pages,
+        )
+        if str(cost_eval.get("policy_decision") or "").upper() == "BLOCK":
+            log_stage(
+                job_id=job_id,
+                stage="UPLOAD_COST_GUARDRAIL",
+                event="FAILED",
+                user=user_email,
+                job_type=job_type,
+                request_id=request_id,
+                policy_decision=cost_eval.get("policy_decision", "BLOCK"),
+                policy_reason=cost_eval.get("policy_reason", ""),
+                projected_cost_usd=cost_eval.get("projected_cost_usd", 0.0),
+            )
+            incr("api_jobs_submit_failed_total", reason="cost_guardrail_block", job_type=job_type or "")
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error_code": "COST_GUARDRAIL_BLOCKED",
+                    "error_message": str(cost_eval.get("policy_reason") or "Upload blocked by cost guardrail policy"),
+                    "policy_decision": cost_eval.get("policy_decision", "BLOCK"),
+                    "estimated_cost_band": cost_eval.get("estimated_cost_band", "VERY_HIGH"),
+                    "estimated_effort": cost_eval.get("estimated_effort", "HIGH"),
+                    "projected_cost_usd": cost_eval.get("projected_cost_usd", 0.0),
+                },
+            )
+        if str(cost_eval.get("policy_decision") or "").upper() == "WARN":
+            log_stage(
+                job_id=job_id,
+                stage="UPLOAD_COST_GUARDRAIL",
+                event="COMPLETED",
+                user=user_email,
+                job_type=job_type,
+                request_id=request_id,
+                policy_decision=cost_eval.get("policy_decision", "WARN"),
+                policy_reason=cost_eval.get("policy_reason", ""),
+                projected_cost_usd=cost_eval.get("projected_cost_usd", 0.0),
+            )
     if precheck_warnings:
         log_stage(
             job_id=job_id,

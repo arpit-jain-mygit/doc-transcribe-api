@@ -105,6 +105,7 @@ def validate_startup_env() -> None:
     _validate_non_negative_int_env("DAILY_JOB_LIMIT_PER_USER", 0, errors)
     _validate_non_negative_int_env("ACTIVE_JOB_LIMIT_PER_USER", 0, errors)
     _validate_bool_flag_env("FEATURE_SMART_INTAKE", errors)
+    _validate_bool_flag_env("FEATURE_COST_GUARDRAIL", errors)
 
     if _is_blank(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")):
         warnings.append(
@@ -134,5 +135,6 @@ def validate_startup_env() -> None:
             "DAILY_JOB_LIMIT_PER_USER",
             "ACTIVE_JOB_LIMIT_PER_USER",
             "FEATURE_SMART_INTAKE",
+            "FEATURE_COST_GUARDRAIL",
         ],
     )

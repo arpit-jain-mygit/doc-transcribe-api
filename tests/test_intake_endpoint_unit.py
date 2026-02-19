@@ -38,6 +38,10 @@ class IntakeEndpointUnitTests(unittest.TestCase):
                     self.assertEqual(out.detected_job_type, "TRANSCRIPTION")
                     self.assertGreaterEqual(out.confidence, 0.0)
                     self.assertGreater(out.eta_sec, 0)
+                    self.assertIn(out.policy_decision, {"ALLOW", "WARN", "BLOCK"})
+                    self.assertIn(out.estimated_effort, {"LOW", "MEDIUM", "HIGH"})
+                    self.assertIn(out.estimated_cost_band, {"LOW", "MEDIUM", "HIGH", "VERY_HIGH"})
+                    self.assertGreaterEqual(float(out.projected_cost_usd or 0.0), 0.0)
                     self.assertEqual(mock_incr.call_count, 3)
 
         asyncio.run(run_case())

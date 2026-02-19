@@ -29,6 +29,9 @@ class TestIntakeContract(unittest.TestCase):
         self.assertEqual(resp.warnings, [])
         self.assertEqual(resp.reasons, [])
         self.assertEqual(resp.confidence, 0.0)
+        self.assertEqual(resp.policy_decision, "ALLOW")
+        self.assertEqual(resp.estimated_effort, "LOW")
+        self.assertEqual(resp.estimated_cost_band, "LOW")
 
     # User value: Protects users from invalid confidence ranges in precheck output.
     def test_response_schema_rejects_invalid_confidence(self):
@@ -39,6 +42,11 @@ class TestIntakeContract(unittest.TestCase):
     def test_response_schema_rejects_invalid_job_type(self):
         with self.assertRaises(ValidationError):
             IntakePrecheckResponse(detected_job_type="VIDEO")
+
+    # User value: Protects users from invalid policy labels in precheck output.
+    def test_response_schema_rejects_invalid_policy_decision(self):
+        with self.assertRaises(ValidationError):
+            IntakePrecheckResponse(detected_job_type="OCR", policy_decision="SKIP")
 
 
 if __name__ == "__main__":

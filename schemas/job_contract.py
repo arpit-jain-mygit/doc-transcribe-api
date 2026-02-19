@@ -1,5 +1,5 @@
 # User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
-CONTRACT_VERSION = "2026-02-16-prs-038"
+CONTRACT_VERSION = "2026-02-16-prs-039"
 
 JOB_TYPES = ("OCR", "TRANSCRIPTION")
 
@@ -35,6 +35,11 @@ INTAKE_PRECHECK_FIELDS = (
     "eta_sec",
     "confidence",
     "reasons",
+    "estimated_effort",
+    "estimated_cost_band",
+    "policy_decision",
+    "policy_reason",
+    "projected_cost_usd",
 )
 
 OCR_QUALITY_FIELDS = (

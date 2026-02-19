@@ -8,7 +8,7 @@ from schemas.job_contract import (
     TERMINAL_STATUSES,
     CANONICAL_FIELDS,
 )
-from services.feature_flags import is_smart_intake_enabled
+from services.feature_flags import is_cost_guardrail_enabled, is_smart_intake_enabled
 
 router = APIRouter()
 
@@ -24,5 +24,6 @@ def job_status_contract():
         "canonical_fields": list(CANONICAL_FIELDS),
         "capabilities": {
             "smart_intake_enabled": is_smart_intake_enabled(),
+            "cost_guardrail_enabled": is_cost_guardrail_enabled(),
         },
     }

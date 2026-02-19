@@ -60,3 +60,13 @@ class IntakePrecheckResponse(BaseModel):
     eta_sec: Optional[int] = Field(default=None, ge=0)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     reasons: List[str] = Field(default_factory=list)
+    # User value: shows projected effort so users can decide whether to proceed now or split input.
+    estimated_effort: Literal["LOW", "MEDIUM", "HIGH"] = "LOW"
+    # User value: gives a simple cost band so users understand expected spend impact.
+    estimated_cost_band: Literal["LOW", "MEDIUM", "HIGH", "VERY_HIGH"] = "LOW"
+    # User value: clearly states whether current policy allows, warns, or blocks this upload.
+    policy_decision: Literal["ALLOW", "WARN", "BLOCK"] = "ALLOW"
+    # User value: explains the policy decision in plain language for transparent user guidance.
+    policy_reason: str = ""
+    # User value: provides exact projected cost estimate for users/ops planning and audits.
+    projected_cost_usd: Optional[float] = Field(default=None, ge=0.0)
