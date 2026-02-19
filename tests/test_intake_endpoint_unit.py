@@ -22,7 +22,7 @@ class IntakeEndpointUnitTests(unittest.TestCase):
 
         asyncio.run(run_case())
 
-    # User value: ensures enabled precheck returns route, warnings, confidence, and ETA fields.
+    # User value: ensures enabled precheck returns route, warnings, confidence, ETA, and metrics/log hooks.
     def test_precheck_enabled_returns_payload(self):
         payload = IntakePrecheckRequest(
             filename="sample.mp3",
@@ -33,10 +33,12 @@ class IntakeEndpointUnitTests(unittest.TestCase):
 
         async def run_case():
             with patch("routes.intake.is_smart_intake_enabled", return_value=True):
-                out = await intake_precheck(payload=payload, user={"email": "u@example.com"})
-                self.assertEqual(out.detected_job_type, "TRANSCRIPTION")
-                self.assertGreaterEqual(out.confidence, 0.0)
-                self.assertGreater(out.eta_sec, 0)
+                with patch("routes.intake.incr") as mock_incr:
+                    out = await intake_precheck(payload=payload, user={"email": "u@example.com"})
+                    self.assertEqual(out.detected_job_type, "TRANSCRIPTION")
+                    self.assertGreaterEqual(out.confidence, 0.0)
+                    self.assertGreater(out.eta_sec, 0)
+                    self.assertEqual(mock_incr.call_count, 3)
 
         asyncio.run(run_case())
 
