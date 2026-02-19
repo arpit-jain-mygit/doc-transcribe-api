@@ -2,6 +2,7 @@
 # routes/jobs.py
 import os
 import json
+import uuid
 import redis
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,13 +16,34 @@ from schemas.job_contract import (
     TRACKED_HISTORY_STATUSES,
     TERMINAL_STATUSES,
     JOB_STATUS_CANCELLED,
+    JOB_STATUS_QUEUED,
 )
 from utils.status_machine import transition_hset
+from utils.request_id import get_request_id
 
 router = APIRouter()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+QUEUE_NAME = os.getenv("QUEUE_NAME", "doc_jobs")
+QUEUE_NAME_OCR = os.getenv("QUEUE_NAME_OCR", "doc_jobs_ocr")
+QUEUE_NAME_TRANSCRIPTION = os.getenv("QUEUE_NAME_TRANSCRIPTION", "doc_jobs_transcription")
+FEATURE_QUEUE_PARTITIONING = str(os.getenv("FEATURE_QUEUE_PARTITIONING", "1")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "doc-transcribe-output-transcribe-serverless").strip()
+
+
+# User value: routes retried jobs to the right worker queue so retries are processed quickly and correctly.
+def resolve_target_queue(job_type: str) -> str:
+    if not FEATURE_QUEUE_PARTITIONING:
+        return QUEUE_NAME
+    if str(job_type or "").upper() == "OCR":
+        return QUEUE_NAME_OCR
+    return QUEUE_NAME_TRANSCRIPTION
 
 
 @router.get("/jobs")
@@ -322,3 +344,102 @@ def cancel_job(job_id: str, user=Depends(verify_google_token)):
         "status": JOB_STATUS_CANCELLED,
         "message": "Cancellation requested",
     }
+
+
+@router.post("/jobs/{job_id}/retry")
+# User value: lets users quickly retry failed/cancelled OCR/transcription jobs without re-uploading files.
+def retry_job(job_id: str, user=Depends(verify_google_token)):
+    email = user["email"].lower()
+    request_id = get_request_id()
+    log_stage(job_id=job_id, stage="JOB_RETRY", event="STARTED", user=email, request_id=request_id)
+
+    key = f"job_status:{job_id}"
+    data = r.hgetall(key)
+    if not data:
+        incr("api_jobs_retry_failed_total", reason="not_found")
+        raise HTTPException(status_code=404, detail="Job not found")
+    if data.get("user") != email:
+        incr("api_jobs_retry_failed_total", reason="forbidden")
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    status = str(data.get("status") or "").upper()
+    if status not in {"FAILED", "CANCELLED"}:
+        incr("api_jobs_retry_failed_total", reason="invalid_status", status=status or "UNKNOWN")
+        raise HTTPException(status_code=409, detail=f"Retry allowed only for FAILED/CANCELLED jobs (current={status or 'UNKNOWN'})")
+
+    job_type = str(data.get("job_type") or "OCR").upper()
+    queue_name = resolve_target_queue(job_type)
+    source = str(data.get("source") or ("ocr" if job_type == "OCR" else "file"))
+    input_filename = str(data.get("input_filename") or "")
+    output_filename = str(data.get("output_filename") or "transcript.txt")
+    input_size_bytes = str(data.get("input_size_bytes") or "")
+    total_pages = str(data.get("total_pages") or "")
+    media_duration = str(data.get("duration_sec") or "")
+
+    input_gcs_uri = str(data.get("input_gcs_uri") or "").strip()
+    if not input_gcs_uri:
+        input_gcs_uri = f"gs://{GCS_BUCKET_NAME}/jobs/{job_id}/input/{input_filename}"
+
+    retry_job_id = uuid.uuid4().hex
+    now_ts = datetime.utcnow().isoformat()
+    retry_key = f"job_status:{retry_job_id}"
+
+    try:
+        ok, current_status, _ = transition_hset(
+            r,
+            key=retry_key,
+            mapping={
+                "status": JOB_STATUS_QUEUED,
+                "stage": "Queued",
+                "progress": 0,
+                "user": email,
+                "job_type": job_type,
+                "source": source,
+                "input_filename": input_filename,
+                "input_size_bytes": input_size_bytes,
+                "output_filename": output_filename,
+                "total_pages": total_pages,
+                "duration_sec": media_duration,
+                "created_at": now_ts,
+                "updated_at": now_ts,
+                "request_id": request_id or "",
+                "retry_of_job_id": job_id,
+            },
+            context="JOB_RETRY_INIT",
+            request_id=request_id or "",
+        )
+        if not ok:
+            raise HTTPException(status_code=409, detail=f"Invalid status transition to QUEUED from {current_status or 'NONE'}")
+
+        r.lpush(f"user_jobs:{email}", retry_job_id)
+        payload = {
+            "job_id": retry_job_id,
+            "job_type": job_type,
+            "source": source,
+            "queue": queue_name,
+            "input_gcs_uri": input_gcs_uri,
+            "filename": input_filename,
+            "output_filename": output_filename,
+            "input_size_bytes": input_size_bytes,
+            "request_id": request_id or "",
+            "retry_of_job_id": job_id,
+        }
+        r.rpush(queue_name, json.dumps(payload, ensure_ascii=False))
+        incr("api_jobs_retry_requested_total", job_type=job_type, source=source, queue=queue_name)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        incr("api_jobs_retry_failed_total", reason="queue_or_metadata_error")
+        raise HTTPException(status_code=503, detail=f"Retry request failed: {exc.__class__.__name__}") from exc
+
+    log_stage(
+        job_id=retry_job_id,
+        stage="JOB_RETRY",
+        event="COMPLETED",
+        user=email,
+        request_id=request_id,
+        retry_of_job_id=job_id,
+        queue=queue_name,
+        job_type=job_type,
+    )
+    return {"job_id": retry_job_id, "request_id": request_id, "retry_of_job_id": job_id}
