@@ -1,6 +1,7 @@
 # User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 # routes/jobs.py
 import os
+import json
 import redis
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -75,6 +76,17 @@ def list_jobs(
             data["download_url"] = signed_url
 
         data["job_id"] = job_id
+        trace_raw = data.get("recovery_trace")
+        if not isinstance(trace_raw, list):
+            text = str(trace_raw or "").strip()
+            if text:
+                try:
+                    parsed = json.loads(text)
+                    data["recovery_trace"] = parsed if isinstance(parsed, list) else []
+                except Exception:
+                    data["recovery_trace"] = []
+            else:
+                data["recovery_trace"] = []
         return data
 
     # Backward compatibility: when no pagination requested, return full array.

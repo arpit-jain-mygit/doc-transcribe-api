@@ -1,6 +1,7 @@
 # User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
 # routes/status.py
 import os
+import json
 import redis
 from fastapi import APIRouter, HTTPException, Depends
 
@@ -29,6 +30,25 @@ def normalize_failure_fields(data: dict) -> None:
     if not error_message:
         fallback = str(data.get("error") or data.get("stage") or "Processing failed. Please try again.").strip()
         data["error_message"] = fallback
+
+
+# User value: normalizes recovery trace so UI/ops can consume a consistent list structure.
+def normalize_recovery_fields(data: dict) -> None:
+    trace_raw = data.get("recovery_trace")
+    if isinstance(trace_raw, list):
+        return
+    if trace_raw is None:
+        data["recovery_trace"] = []
+        return
+    text = str(trace_raw).strip()
+    if not text:
+        data["recovery_trace"] = []
+        return
+    try:
+        parsed = json.loads(text)
+        data["recovery_trace"] = parsed if isinstance(parsed, list) else []
+    except Exception:
+        data["recovery_trace"] = []
 
 
 @router.get("/status/{job_id}")
@@ -73,6 +93,7 @@ def get_status(
         data["download_url"] = signed_url
 
     normalize_failure_fields(data)
+    normalize_recovery_fields(data)
 
     log_stage(
         job_id=job_id,

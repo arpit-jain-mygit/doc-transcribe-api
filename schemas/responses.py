@@ -34,6 +34,16 @@ class JobStatusResponse(BaseModel):
     segment_quality: List[dict] = Field(default_factory=list)
     # User value: gives users actionable transcription-specific remediation hints.
     transcript_quality_hints: List[str] = Field(default_factory=list)
+    # User value: shows what automatic recovery action the system selected after a failure.
+    recovery_action: Optional[str] = None
+    # User value: explains why recovery path was chosen so users/ops understand behavior.
+    recovery_reason: Optional[str] = None
+    # User value: shows current recovery attempt count for transparent retry progression.
+    recovery_attempt: Optional[int] = Field(default=None, ge=0)
+    # User value: shows max recovery attempts so users know when fail-fast will occur.
+    recovery_max_attempts: Optional[int] = Field(default=None, ge=0)
+    # User value: preserves recovery history details for support and diagnostics.
+    recovery_trace: List[dict] = Field(default_factory=list)
 
 
 class IntakeWarning(BaseModel):
