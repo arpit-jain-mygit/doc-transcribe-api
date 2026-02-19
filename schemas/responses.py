@@ -26,6 +26,14 @@ class JobStatusResponse(BaseModel):
     low_confidence_pages: List[int] = Field(default_factory=list)
     # User value: provides clear fix suggestions when OCR quality is weak.
     quality_hints: List[str] = Field(default_factory=list)
+    # User value: summarizes transcription quality so users know when transcript review is needed.
+    transcript_quality_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    # User value: identifies weak segments so users can jump directly to risky transcript sections.
+    low_confidence_segments: List[int] = Field(default_factory=list)
+    # User value: exposes per-segment quality details for explainable transcription outcomes.
+    segment_quality: List[dict] = Field(default_factory=list)
+    # User value: gives users actionable transcription-specific remediation hints.
+    transcript_quality_hints: List[str] = Field(default_factory=list)
 
 
 class IntakeWarning(BaseModel):
