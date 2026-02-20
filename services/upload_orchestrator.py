@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-import unicodedata
 import uuid
 from datetime import datetime
 
@@ -93,8 +92,9 @@ def derive_total_pages(file: UploadFile, job_type: str) -> int | None:
 def make_output_filename(uploaded_name: str) -> str:
     base = os.path.basename(uploaded_name or "transcript")
     stem, _ = os.path.splitext(base)
-    stem = unicodedata.normalize("NFKC", stem)
-    stem = re.sub(r"[^A-Za-z0-9]+", "_", stem).strip("_")
+    # Preserve user-visible Unicode names; only strip path separators/control chars.
+    stem = re.sub(r"[\x00-\x1f\x7f]", "", str(stem or "")).strip()
+    stem = stem.replace("/", "_").replace("\\", "_")
     if not stem:
         stem = "transcript"
     return f"{stem}.txt"
