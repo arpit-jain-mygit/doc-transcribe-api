@@ -9,7 +9,7 @@ logger = logging.getLogger("api.quota")
 
 DAILY_JOB_LIMIT_PER_USER = int(os.getenv("DAILY_JOB_LIMIT_PER_USER", "0"))
 ACTIVE_JOB_LIMIT_PER_USER = int(os.getenv("ACTIVE_JOB_LIMIT_PER_USER", "0"))
-MAX_OCR_PAGES = int(os.getenv("MAX_OCR_PAGES", "0"))
+MAX_OCR_PAGES = int(os.getenv("MAX_OCR_PAGES", "500"))
 MAX_TRANSCRIPTION_DURATION_SEC = int(os.getenv("MAX_TRANSCRIPTION_DURATION_SEC", "0"))
 
 _TERMINAL = {"COMPLETED", "FAILED", "CANCELLED"}

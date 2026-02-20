@@ -11,6 +11,8 @@ OCR_COST_PER_PAGE_USD = float(os.getenv("OCR_COST_PER_PAGE_USD", "0.02"))
 OCR_COST_PER_MB_USD = float(os.getenv("OCR_COST_PER_MB_USD", "0.003"))
 TRANSCRIPTION_COST_PER_MIN_USD = float(os.getenv("TRANSCRIPTION_COST_PER_MIN_USD", "0.015"))
 TRANSCRIPTION_COST_PER_MB_USD = float(os.getenv("TRANSCRIPTION_COST_PER_MB_USD", "0.001"))
+MAX_OCR_FILE_SIZE_MB = int(os.getenv("MAX_OCR_FILE_SIZE_MB", "200"))
+MAX_OCR_PAGES = int(os.getenv("MAX_OCR_PAGES", "500"))
 
 COST_GUARDRAIL_WARN_USD = float(os.getenv("COST_GUARDRAIL_WARN_USD", "0.75"))
 COST_GUARDRAIL_BLOCK_USD = float(os.getenv("COST_GUARDRAIL_BLOCK_USD", "2.50"))
@@ -75,6 +77,41 @@ def evaluate_cost_guardrail(
     media_duration_sec: float | None,
     pdf_page_count: int | None,
 ) -> dict:
+    jt = str(job_type or "").upper()
+    size_mb = max(0.0, float(file_size_bytes or 0) / (1024 * 1024))
+    pages = max(1.0, float(pdf_page_count or 1))
+
+    # Hard OCR safety policy: block above platform max size/page caps.
+    if jt == "OCR":
+        if size_mb > float(MAX_OCR_FILE_SIZE_MB):
+            projected = estimate_projected_cost_usd(
+                job_type=jt,
+                file_size_bytes=file_size_bytes,
+                media_duration_sec=media_duration_sec,
+                pdf_page_count=pdf_page_count,
+            )
+            return {
+                "projected_cost_usd": round(projected, 4),
+                "estimated_effort": estimate_effort_band(projected),
+                "estimated_cost_band": estimate_cost_band(projected),
+                "policy_decision": "BLOCK",
+                "policy_reason": f"OCR max file size is {MAX_OCR_FILE_SIZE_MB} MB",
+            }
+        if pages > float(MAX_OCR_PAGES):
+            projected = estimate_projected_cost_usd(
+                job_type=jt,
+                file_size_bytes=file_size_bytes,
+                media_duration_sec=media_duration_sec,
+                pdf_page_count=pdf_page_count,
+            )
+            return {
+                "projected_cost_usd": round(projected, 4),
+                "estimated_effort": estimate_effort_band(projected),
+                "estimated_cost_band": estimate_cost_band(projected),
+                "policy_decision": "BLOCK",
+                "policy_reason": f"OCR max page count is {MAX_OCR_PAGES} pages",
+            }
+
     projected = estimate_projected_cost_usd(
         job_type=job_type,
         file_size_bytes=file_size_bytes,
