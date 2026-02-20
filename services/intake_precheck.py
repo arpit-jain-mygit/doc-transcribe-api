@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from services.intake_router import detect_route_from_metadata
 
 MAX_OCR_FILE_SIZE_MB = int(os.getenv("MAX_OCR_FILE_SIZE_MB", "200"))
-MAX_TRANSCRIPTION_FILE_SIZE_MB = int(os.getenv("MAX_TRANSCRIPTION_FILE_SIZE_MB", "100"))
+MAX_TRANSCRIPTION_FILE_SIZE_MB = int(os.getenv("MAX_TRANSCRIPTION_FILE_SIZE_MB", "200"))
 MAX_OCR_PAGES = int(os.getenv("MAX_OCR_PAGES", "500"))
 MAX_TRANSCRIPTION_DURATION_SEC = int(os.getenv("MAX_TRANSCRIPTION_DURATION_SEC", "0"))
 
