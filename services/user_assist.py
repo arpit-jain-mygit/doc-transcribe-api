@@ -34,20 +34,15 @@ def derive_user_assist(
     wait_sec = int(queue_wait_sec or 0)
 
     if state == "QUEUED":
-        if wait_sec >= 90:
-            return assist_payload(
-                level="WARN",
-                title="कतार में अधिक प्रतीक्षा",
-                message="उच्च लोड के कारण आपका कार्य कतार में है। कृपया थोड़ी देर प्रतीक्षा करें या इतिहास से बाद में स्थिति देखें।",
-                action_label="इतिहास देखें",
-                action_type="OPEN_HISTORY",
-            )
+        # Agent-6 queue hint is primary for normal queued state; assist appears only on prolonged wait.
+        if wait_sec < 90:
+            return None
         return assist_payload(
-            level="INFO",
-            title="कार्य कतार में है",
-            message="आपका अनुरोध सुरक्षित है और क्रम से उठाया जाएगा।",
-            action_label="प्रतीक्षा करें",
-            action_type="WAIT",
+            level="WARN",
+            title="कतार में अधिक प्रतीक्षा",
+            message="उच्च लोड के कारण आपका कार्य कतार में है। कृपया थोड़ी देर प्रतीक्षा करें या इतिहास से बाद में स्थिति देखें।",
+            action_label="इतिहास देखें",
+            action_type="OPEN_HISTORY",
         )
 
     if state == "FAILED":

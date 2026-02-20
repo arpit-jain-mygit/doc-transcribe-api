@@ -5,6 +5,11 @@ from services.user_assist import derive_user_assist
 
 
 class UserAssistUnitTests(unittest.TestCase):
+    # User value: avoids duplicate queue messaging by keeping normal queued guidance to queue-orchestration hints.
+    def test_queued_low_wait_no_assist(self):
+        assist = derive_user_assist(status="QUEUED", queue_wait_sec=20)
+        self.assertIsNone(assist)
+
     # User value: verifies queued users get clear wait guidance when queue delay is high.
     def test_queued_high_wait_assist(self):
         assist = derive_user_assist(status="QUEUED", queue_wait_sec=120)
