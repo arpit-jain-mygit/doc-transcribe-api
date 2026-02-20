@@ -375,6 +375,7 @@ def retry_job(job_id: str, user=Depends(verify_google_token)):
     input_size_bytes = str(data.get("input_size_bytes") or "")
     total_pages = str(data.get("total_pages") or "")
     media_duration = str(data.get("duration_sec") or "")
+    content_subtype = str(data.get("content_subtype") or "").strip().lower()
 
     input_gcs_uri = str(data.get("input_gcs_uri") or "").strip()
     if not input_gcs_uri:
@@ -403,6 +404,7 @@ def retry_job(job_id: str, user=Depends(verify_google_token)):
                 "created_at": now_ts,
                 "updated_at": now_ts,
                 "request_id": request_id or "",
+                "content_subtype": content_subtype,
                 "retry_of_job_id": job_id,
             },
             context="JOB_RETRY_INIT",
@@ -422,6 +424,7 @@ def retry_job(job_id: str, user=Depends(verify_google_token)):
             "output_filename": output_filename,
             "input_size_bytes": input_size_bytes,
             "request_id": request_id or "",
+            "content_subtype": content_subtype,
             "retry_of_job_id": job_id,
         }
         r.rpush(queue_name, json.dumps(payload, ensure_ascii=False))

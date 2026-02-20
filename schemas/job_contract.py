@@ -76,6 +76,7 @@ CANONICAL_FIELDS = (
     "stage",
     "progress",
     "source",
+    "content_subtype",
     "input_filename",
     "input_size_bytes",
     "output_filename",

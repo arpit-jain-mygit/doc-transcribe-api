@@ -47,6 +47,14 @@ MAX_OCR_FILE_SIZE_MB = int(os.getenv("MAX_OCR_FILE_SIZE_MB", "200"))
 MAX_TRANSCRIPTION_FILE_SIZE_MB = int(os.getenv("MAX_TRANSCRIPTION_FILE_SIZE_MB", "200"))
 MAX_OCR_FILE_SIZE_BYTES = MAX_OCR_FILE_SIZE_MB * 1024 * 1024
 MAX_TRANSCRIPTION_FILE_SIZE_BYTES = MAX_TRANSCRIPTION_FILE_SIZE_MB * 1024 * 1024
+ALLOWED_CONTENT_SUBTYPES = {
+    "OCR": {"jain_literature", "general"},
+    "TRANSCRIPTION": {"pravachan", "shanka_samadhan"},
+}
+DEFAULT_CONTENT_SUBTYPE = {
+    "OCR": "jain_literature",
+    "TRANSCRIPTION": "pravachan",
+}
 
 
 # User value: routes work so user OCR/transcription jobs are processed correctly.
@@ -125,6 +133,23 @@ def _mime_allowed(content_type: str | None, prefixes: tuple[str, ...]) -> bool:
     if not mime:
         return False
     return any(mime.startswith(prefix) for prefix in prefixes)
+
+
+# User value: ensures user-selected content type is valid so prompt routing stays predictable.
+def normalize_content_subtype(job_type: str, content_subtype: str | None) -> str:
+    norm_job_type = str(job_type or "").upper()
+    allowed = ALLOWED_CONTENT_SUBTYPES.get(norm_job_type, set())
+    if not allowed:
+        return ""
+    value = str(content_subtype or "").strip().lower()
+    if not value:
+        return DEFAULT_CONTENT_SUBTYPE.get(norm_job_type, "")
+    if value not in allowed:
+        raise _bad_request(
+            "INVALID_CONTENT_SUBTYPE",
+            f"Unsupported content subtype for {job_type}: {value}",
+        )
+    return value
 
 
 # User value: submits user files safely for OCR/transcription processing.
@@ -245,6 +270,7 @@ def submit_upload_job(
     request_id: str,
     idempotency_key: str | None,
     media_duration_sec: float | None = None,
+    content_subtype: str | None = None,
 ) -> dict:
     if job_type not in JOB_TYPES:
         incr("api_jobs_submit_failed_total", reason="invalid_job_type", job_type=job_type or "")
@@ -254,6 +280,7 @@ def submit_upload_job(
     user_email = email.lower()
     queue_name = resolve_target_queue(job_type)
     idem_key = normalize_idempotency_key(idempotency_key)
+    normalized_content_subtype = normalize_content_subtype(job_type, content_subtype)
 
     if idem_key:
         log_stage(
@@ -457,6 +484,7 @@ def submit_upload_job(
                 "created_at": now_ts,
                 "updated_at": now_ts,
                 "request_id": request_id or "",
+                "content_subtype": normalized_content_subtype,
             },
             context="UPLOAD_INIT",
             request_id=request_id or "",
@@ -502,6 +530,7 @@ def submit_upload_job(
         "output_filename": output_filename,
         "input_size_bytes": input_size_bytes,
         "request_id": request_id or "",
+        "content_subtype": normalized_content_subtype,
     }
 
     log_stage(
