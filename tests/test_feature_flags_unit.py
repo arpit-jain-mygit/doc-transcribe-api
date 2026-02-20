@@ -11,6 +11,7 @@ class FeatureFlagsUnitTests(unittest.TestCase):
     def setUp(self):
         self._old = os.environ.get("FEATURE_SMART_INTAKE")
         self._old_cost = os.environ.get("FEATURE_COST_GUARDRAIL")
+        self._old_queue = os.environ.get("FEATURE_QUEUE_ORCHESTRATION")
 
     # User value: supports tearDown so users get deterministic behavior regardless of local env leftovers.
     def tearDown(self):
@@ -22,6 +23,10 @@ class FeatureFlagsUnitTests(unittest.TestCase):
             os.environ.pop("FEATURE_COST_GUARDRAIL", None)
         else:
             os.environ["FEATURE_COST_GUARDRAIL"] = self._old_cost
+        if self._old_queue is None:
+            os.environ.pop("FEATURE_QUEUE_ORCHESTRATION", None)
+        else:
+            os.environ["FEATURE_QUEUE_ORCHESTRATION"] = self._old_queue
 
     # User value: confirms explicit enablement works so intake guidance can be rolled out safely.
     def test_smart_intake_flag_enabled(self):
@@ -47,6 +52,14 @@ class FeatureFlagsUnitTests(unittest.TestCase):
         ff = importlib.reload(ff)
         self.assertTrue(ff.is_cost_guardrail_enabled())
 
+    # User value: confirms queue orchestration flag defaults on so queued users get fair scheduling behavior.
+    def test_queue_orchestration_flag_default_enabled(self):
+        os.environ.pop("FEATURE_QUEUE_ORCHESTRATION", None)
+        import services.feature_flags as ff
+
+        ff = importlib.reload(ff)
+        self.assertTrue(ff.is_queue_orchestration_enabled())
+
     # User value: prevents bad deploy config that could break OCR/transcription startup behavior.
     def test_validate_bool_flag_env_rejects_invalid(self):
         errors = []
@@ -62,6 +75,14 @@ class FeatureFlagsUnitTests(unittest.TestCase):
         startup_env._validate_bool_flag_env("FEATURE_COST_GUARDRAIL", errors)
         self.assertTrue(errors)
         self.assertIn("FEATURE_COST_GUARDRAIL must be one of", errors[0])
+
+    # User value: prevents bad deploy config from silently breaking queue orchestration behavior.
+    def test_validate_queue_bool_flag_env_rejects_invalid(self):
+        errors = []
+        os.environ["FEATURE_QUEUE_ORCHESTRATION"] = "maybe"
+        startup_env._validate_bool_flag_env("FEATURE_QUEUE_ORCHESTRATION", errors)
+        self.assertTrue(errors)
+        self.assertIn("FEATURE_QUEUE_ORCHESTRATION must be one of", errors[0])
 
 
 if __name__ == "__main__":

@@ -39,6 +39,7 @@ from routes.auth import router as auth_router
 from routes.jobs import router as jobs_router
 from routes.contract import router as contract_router
 from routes.intake import router as intake_router
+from routes.queue_health import router as queue_health_router
 
 app = FastAPI(title="Doc Transcribe API")
 
@@ -209,3 +210,4 @@ app.include_router(intake_router)
 app.include_router(upload_router)
 app.include_router(status_router)
 app.include_router(jobs_router)
+app.include_router(queue_health_router)
