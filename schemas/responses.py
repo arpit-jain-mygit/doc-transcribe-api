@@ -44,6 +44,8 @@ class JobStatusResponse(BaseModel):
     recovery_max_attempts: Optional[int] = Field(default=None, ge=0)
     # User value: preserves recovery history details for support and diagnostics.
     recovery_trace: List[dict] = Field(default_factory=list)
+    # User value: provides clear Hindi next-best action guidance directly in status payload.
+    assist: Optional[dict] = None
 
 
 class IntakeWarning(BaseModel):

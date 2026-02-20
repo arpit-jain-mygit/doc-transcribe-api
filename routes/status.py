@@ -3,10 +3,12 @@
 import os
 import json
 import redis
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
 
 from services.auth import verify_google_token
 from services.gcs import generate_signed_url
+from services.user_assist import derive_user_assist
 from utils.request_id import get_request_id
 from utils.stage_logging import log_stage
 
@@ -39,6 +41,21 @@ def normalize_recovery_fields(data: dict) -> None:
         return
     if trace_raw is None:
         data["recovery_trace"] = []
+
+
+# User value: computes queued wait so assist guidance can be context-aware for long waits.
+def compute_queue_wait_sec(data: dict) -> int:
+    try:
+        created = str(data.get("created_at") or "").strip()
+        if not created:
+            return 0
+        normalized = created if ("+" in created or created.endswith("Z")) else f"{created}Z"
+        dt = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return max(0, int((datetime.now(timezone.utc) - dt).total_seconds()))
+    except Exception:
+        return 0
         return
     text = str(trace_raw).strip()
     if not text:
@@ -94,6 +111,15 @@ def get_status(
 
     normalize_failure_fields(data)
     normalize_recovery_fields(data)
+    queue_wait_sec = compute_queue_wait_sec(data)
+    assist = derive_user_assist(
+        status=str(data.get("status") or ""),
+        error_code=str(data.get("error_code") or ""),
+        stage=str(data.get("stage") or ""),
+        queue_wait_sec=queue_wait_sec,
+    )
+    if assist:
+        data["assist"] = assist
 
     log_stage(
         job_id=job_id,

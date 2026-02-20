@@ -1,5 +1,5 @@
 # User value: This file helps users get reliable OCR/transcription results with clear processing behavior.
-CONTRACT_VERSION = "2026-02-16-prs-040"
+CONTRACT_VERSION = "2026-02-16-prs-041"
 
 JOB_TYPES = ("OCR", "TRANSCRIPTION")
 
@@ -63,6 +63,10 @@ RECOVERY_FIELDS = (
     "recovery_trace",
 )
 
+ASSIST_FIELDS = (
+    "assist",
+)
+
 CANONICAL_FIELDS = (
     "contract_version",
     "request_id",
@@ -87,4 +91,5 @@ CANONICAL_FIELDS = (
     *OCR_QUALITY_FIELDS,
     *TRANSCRIPTION_QUALITY_FIELDS,
     *RECOVERY_FIELDS,
+    *ASSIST_FIELDS,
 )
