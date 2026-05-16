@@ -3,6 +3,7 @@
 import os
 import logging
 import time
+import subprocess
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -30,12 +31,31 @@ from startup_env import validate_startup_env
 from utils.request_id import REQUEST_ID_HEADER, get_request_id, normalize_request_id, set_request_id
 
 validate_startup_env()
+
+
+def _detect_gcloud_account() -> str:
+    try:
+        out = subprocess.check_output(
+            ["gcloud", "config", "get-value", "account"],
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+            text=True,
+        )
+        value = str(out).strip()
+        if value and value != "(unset)":
+            return value
+    except Exception:
+        pass
+    return ""
+
+
 logger.info(
     "api_gcp_config bucket=%s credentials_path=%s credentials_json_set=%s",
     os.getenv("GCS_BUCKET_NAME", ""),
     os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
     "1" if os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON") else "0",
 )
+logger.info("gcloud_active_account=%s", _detect_gcloud_account())
 
 from routes.upload import router as upload_router
 from routes.status import router as status_router
