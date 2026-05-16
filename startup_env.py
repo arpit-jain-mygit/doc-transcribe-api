@@ -108,9 +108,11 @@ def validate_startup_env() -> None:
     _validate_bool_flag_env("FEATURE_COST_GUARDRAIL", errors)
     _validate_bool_flag_env("FEATURE_QUEUE_ORCHESTRATION", errors)
 
-    if _is_blank(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")):
+    if _is_blank(os.getenv("GOOGLE_APPLICATION_CREDENTIALS")) and _is_blank(
+        os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    ):
         warnings.append(
-            "GOOGLE_APPLICATION_CREDENTIALS_JSON is not set; relying on ambient ADC credentials"
+            "Neither GOOGLE_APPLICATION_CREDENTIALS nor GOOGLE_APPLICATION_CREDENTIALS_JSON is set; relying on ambient ADC credentials"
         )
 
     if errors:

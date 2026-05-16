@@ -32,7 +32,10 @@ Core:
 - `QUEUE_NAME` (default: `doc_jobs`)
 - `DLQ_NAME` (default: `doc_jobs_dead`)
 - `GCS_BUCKET_NAME`
-- `GOOGLE_APPLICATION_CREDENTIALS_JSON` (base64 json credentials, if used by your GCS helper)
+- `GOOGLE_APPLICATION_CREDENTIALS` (path to service-account JSON file)
+
+Compatibility fallback:
+- `GOOGLE_APPLICATION_CREDENTIALS_JSON` (base64 json credentials)
 
 Notes:
 - `.env` is loaded by `app.py` before route imports.
