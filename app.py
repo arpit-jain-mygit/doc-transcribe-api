@@ -30,6 +30,12 @@ from startup_env import validate_startup_env
 from utils.request_id import REQUEST_ID_HEADER, get_request_id, normalize_request_id, set_request_id
 
 validate_startup_env()
+logger.info(
+    "api_gcp_config bucket=%s credentials_path=%s credentials_json_set=%s",
+    os.getenv("GCS_BUCKET_NAME", ""),
+    os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
+    "1" if os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON") else "0",
+)
 
 from routes.upload import router as upload_router
 from routes.status import router as status_router
