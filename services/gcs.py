@@ -16,6 +16,11 @@ def _get_client():
     if _client:
         return _client
 
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if creds_path and os.path.isfile(creds_path):
+        _client = storage.Client.from_service_account_json(creds_path)
+        return _client
+
     creds_b64 = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if creds_b64:
         creds = json.loads(base64.b64decode(creds_b64))
